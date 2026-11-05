@@ -207,6 +207,11 @@ Local web app at `http://127.0.0.1:<port>`, started with `partslib serve`.
 
 Dashboard edits write the YAML files and create a git commit, so the history stays complete. It binds to localhost only.
 
+- **Index:** `build/index.sqlite`, rebuilt from part files and saved scans whenever one changes (D2). Where-used and board pages show each board's most recent scan.
+- **Search:** terms separated by commas must all match. A value such as `100nF` or `4k7` matches any parameter with that value; `≤`, `≥`, `<` and `>` compare; anything else, including bare numbers like `0603`, matches text.
+- **Previews:** rendered by `kicad-cli` from the part's base symbol and footprint in `assets/`, with a private KiCad config, and cached under `build/previews/`.
+- **Where used** depends on the `IPN` field on board symbols, so a board shows here only once its parts carry IPNs (section 9).
+
 ## 9. Migrating existing boards
 
 Existing parts are matched, not forced. Editing live board files is out of scope for v1.

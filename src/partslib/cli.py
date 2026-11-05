@@ -14,7 +14,6 @@ from partslib.scan import format_result, save, scan
 
 # Commands not built yet -> (help text, milestone that delivers them).
 PLANNED = {
-    "serve": ("Start the local dashboard", "M4"),
     "vendor": ("Copy a board's parts into its project lib/ folder", "M7"),
 }
 
@@ -68,6 +67,9 @@ def build_parser() -> argparse.ArgumentParser:
     scan_parser.add_argument("--fresh", action="store_true", help="also open the board in KiCad as a fresh machine would")
     scan_parser.add_argument("--config-dir", type=Path, help="KiCad config to resolve libraries against (default: KiCad's own)")
     scan_parser.add_argument("--all", action="store_true", help="list every designator, not just the first few")
+
+    serve = subparsers.add_parser("serve", help="Start the local dashboard on 127.0.0.1")
+    serve.add_argument("--port", type=int, default=8765)
 
     for name, (help_text, _milestone) in PLANNED.items():
         subparsers.add_parser(name, help=help_text)
@@ -140,12 +142,24 @@ def _run_scan(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def _run_serve(args: argparse.Namespace) -> int:
+    import uvicorn
+
+    from partslib.web.app import create_app
+
+    # Localhost only (spec section 8): there are no accounts, so nothing else may reach it.
+    print(f"partslib dashboard: http://127.0.0.1:{args.port}/")
+    uvicorn.run(create_app(args.root), host="127.0.0.1", port=args.port, log_level="warning")
+    return 0
+
+
 COMMAND_RUNNERS = {
     "check": _run_check,
     "add": _run_add,
     "build": _run_build,
     "install": _run_install,
     "scan": _run_scan,
+    "serve": _run_serve,
 }
 
 

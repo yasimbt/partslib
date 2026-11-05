@@ -1,0 +1,19 @@
+{% from "_macros.html" import status as badge %}
+<p class="muted">{{ parts | length }} part{{ "" if parts | length == 1 else "s" }}</p>
+{% if parts %}
+<table>
+  <thead><tr><th>IPN</th><th>Value</th><th>Description</th><th>MPN</th><th>Status</th><th class="num">On boards</th></tr></thead>
+  <tbody>
+  {% for p in parts %}
+    <tr>
+      <td><a href="/parts/{{ p.ipn }}" class="mono">{{ p.ipn }}</a></td>
+      <td>{{ p.value }}</td>
+      <td>{{ p.description }}</td>
+      <td class="mono">{% if p.mpns %}{{ p.mpns[0].mpn }}{% endif %}</td>
+      <td>{{ badge(p.status) }}</td>
+      <td class="num">{{ p.used }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="empty">No parts match.</p>{% endif %}

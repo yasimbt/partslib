@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% from "_macros.html" import severity, refs %}
+{% block title %}{{ board.name }}{% endblock %}
+{% block main %}
+<h1>{{ board.name }}</h1>
+<p class="muted">{{ board.status }} · {{ board.path }}{% if board.source %} · scanned at <span class="mono">{{ board.source[:12] }}</span> on {{ board.scanned_at }}{% endif %}</p>
+{% if not board.source %}<p class="empty">Not scanned yet. Run <code>partslib scan {{ board.name }}</code>.</p>{% else %}
+
+<h2>Checks</h2>
+{% if findings %}
+<table>
+  <thead><tr><th>Severity</th><th>Check</th><th>Problem</th></tr></thead>
+  <tbody>{% for f in findings %}
+    <tr><td>{{ severity(f.severity) }}</td><td class="mono">{{ f.code }}</td><td>{{ f.message }}{% if f.references %}<div>{{ refs(f.references) }}</div>{% endif %}</td></tr>
+  {% endfor %}</tbody>
+</table>
+{% else %}<p class="sev-ok">All checks pass.</p>{% endif %}
+
+<h2>BOM <a href="/boards/{{ board.name }}/bom.csv" style="font-size:.85rem;font-weight:400">CSV</a></h2>
+<table>
+  <thead><tr><th>IPN</th><th>Value</th><th>Footprint</th><th class="num">Qty</th><th>Designators</th></tr></thead>
+  <tbody>{% for line in bom %}
+    <tr>
+      <td>{% if line.ipn %}{% if line.known %}<a href="/parts/{{ line.ipn }}" class="mono">{{ line.ipn }}</a>{% else %}<span class="mono sev-warning">{{ line.ipn }}</span> <span class="muted">unknown</span>{% endif %}{% else %}<span class="muted">no IPN</span>{% endif %}</td>
+      <td>{{ line.value }}{% if line.description %}<div class="muted">{{ line.description }}</div>{% endif %}</td>
+      <td class="mono">{{ line.footprint }}</td>
+      <td class="num">{{ line.quantity }}</td>
+      <td>{{ refs(line.references) }}</td>
+    </tr>
+  {% endfor %}</tbody>
+</table>
+
+<h2>Changes between scans</h2>
+{% if changes %}
+<form method="get" class="search">
+  <label>From <select name="base">{% for s in scans %}<option value="{{ s.file }}" {% if s.file == base %}selected{% endif %}>{{ s.source[:12] }} ({{ s.scanned_at }})</option>{% endfor %}</select></label>
+  <label>To <select name="head">{% for s in scans %}<option value="{{ s.file }}" {% if s.file == head %}selected{% endif %}>{{ s.source[:12] }} ({{ s.scanned_at }})</option>{% endfor %}</select></label>
+  <button type="submit">Compare</button>
+</form>
+<p><span class="mono">{{ changes.base[:12] }}</span> → <span class="mono">{{ changes.head[:12] }}</span>:
+  {{ changes.added | length }} added, {{ changes.removed | length }} removed, {{ changes.changed | length }} changed.</p>
+{% if changes.added %}<p>Added: {{ refs(changes.added) }}</p>{% endif %}
+{% if changes.removed %}<p>Removed: {{ refs(changes.removed) }}</p>{% endif %}
+{% if changes.changed %}
+<table><thead><tr><th>Designator</th><th>Field</th><th>Before</th><th>After</th></tr></thead><tbody>
+{% for c in changes.changed %}{% for field, pair in c.differences.items() %}<tr><td class="mono">{{ c.reference }}</td><td>{{ field }}</td><td class="mono">{{ pair[0] }}</td><td class="mono">{{ pair[1] }}</td></tr>{% endfor %}{% endfor %}
+</tbody></table>{% endif %}
+{% if changes.findings %}
+<table><thead><tr><th>Check</th><th class="num">Before</th><th class="num">After</th></tr></thead><tbody>
+{% for f in changes.findings %}<tr><td class="mono">{{ f.code }}</td><td class="num">{{ f.before }}</td><td class="num">{{ f.after }}</td></tr>{% endfor %}
+</tbody></table>{% endif %}
+{% else %}<p class="muted">Only one scan so far. Scan another commit, or <code>--worktree</code>, to compare.</p>{% endif %}
+{% endif %}
+{% endblock %}

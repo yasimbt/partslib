@@ -1,0 +1,3 @@
+{% macro status(value) %}<span class="badge status-{{ value }}">{{ value }}</span>{% endmacro %}
+{% macro severity(value) %}<span class="sev-{{ value }}">{{ value }}</span>{% endmacro %}
+{% macro refs(list, limit=40) %}<span class="refs">{{ list[:limit] | join(", ") }}{% if list | length > limit %} and {{ list | length - limit }} more{% endif %}</span>{% endmacro %}

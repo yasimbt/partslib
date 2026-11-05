@@ -6,6 +6,7 @@ where each part is used.
 
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -441,6 +442,7 @@ def save(root: Path, result: ScanResult) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     data = asdict(result)
     data["counts"] = result.counts()
+    data["scanned_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return path
 

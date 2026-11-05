@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}partslib{% endblock %} · partslib</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+  <header>
+    <strong>partslib</strong>
+    <nav aria-label="Main">
+      <a href="/">Overview</a>
+      <a href="/parts">Parts</a>
+      <a href="/boards">Boards</a>
+    </nav>
+  </header>
+  <main>{% block main %}{% endblock %}</main>
+</body>
+</html>

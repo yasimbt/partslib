@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status, refs %}
+{% block title %}{{ part.ipn }}{% endblock %}
+{% block main %}
+<h1><span class="mono">{{ part.ipn }}</span> {{ status(part.status) }}</h1>
+<p>{{ part.description }}{% if part.value %} · <strong>{{ part.value }}</strong>{% endif %}</p>
+{% if part.superseded_by %}<p>Superseded by <a href="/parts/{{ part.superseded_by }}" class="mono">{{ part.superseded_by }}</a>.</p>{% endif %}
+
+<h2>Where used</h2>
+{% if used %}
+<table>
+  <thead><tr><th>Board</th><th>Status</th><th>Scanned</th><th class="num">Quantity</th><th>Designators</th></tr></thead>
+  <tbody>{% for u in used %}
+    <tr><td><a href="/boards/{{ u.board }}">{{ u.board }}</a></td><td>{{ u.status }}</td><td class="mono">{{ (u.source or "")[:12] }}</td><td class="num">{{ u.quantity }}</td><td>{{ refs(u.references) }}</td></tr>
+  {% endfor %}</tbody>
+</table>
+{% else %}<p class="empty">No scanned board uses {{ part.ipn }}. Boards only show here once their symbols carry an IPN field and have been scanned with <code>partslib scan</code>.</p>{% endif %}
+
+<div class="previews">
+  {% if part.symbol %}<figure><img src="/preview/symbol/{{ part.ipn }}.svg" alt="Symbol {{ part.symbol }}" loading="lazy"><figcaption>{{ part.symbol }}</figcaption></figure>{% endif %}
+  {% if part.footprint %}<figure><img src="/preview/footprint/{{ part.ipn }}.svg" alt="Footprint {{ part.footprint }}" loading="lazy"><figcaption>{{ part.footprint }}</figcaption></figure>{% endif %}
+</div>
+
+<h2>Parameters</h2>
+<table>
+  <thead><tr><th>Parameter</th><th>Value</th><th>Identity</th></tr></thead>
+  <tbody>{% for p in params %}<tr><td class="mono">{{ p.name }}</td><td>{{ p.value }}</td><td>{% if p.identity %}yes{% endif %}</td></tr>{% endfor %}</tbody>
+</table>
+
+<h2>Manufacturer parts</h2>
+{% if mpns %}
+<table>
+  <thead><tr><th>Manufacturer</th><th>MPN</th><th>LCSC</th><th>Lifecycle</th><th>Verified</th></tr></thead>
+  <tbody>{% for m in mpns %}<tr><td>{{ m.manufacturer }}</td><td class="mono">{{ m.mpn }}</td><td class="mono">{{ m.lcsc }}</td><td>{{ m.lifecycle or "–" }}</td><td>{{ m.verified or "not yet" }}</td></tr>{% endfor %}</tbody>
+</table>
+{% else %}<p class="empty">No MPNs.</p>{% endif %}
+<p>Datasheet: {% if part.datasheet %}<a href="{{ part.datasheet }}" rel="noopener noreferrer" target="_blank">{{ part.datasheet }}</a>{% else %}<span class="muted">none</span>{% endif %}</p>
+
+<h2>Assets</h2>
+<table>
+  <thead><tr><th>Kind</th><th>Reference</th><th>Source</th><th>Licence</th><th>Version</th></tr></thead>
+  <tbody>{% for a in assets %}
+    <tr><td>{{ a.kind }}</td><td class="mono">{{ a.id }}</td>
+      {% if a.provenance %}<td>{{ a.provenance.source }}</td><td class="mono">{{ a.provenance.licence }}</td><td>{{ a.provenance.version }}</td>
+      {% else %}<td colspan="3" class="muted">no provenance entry</td>{% endif %}</tr>
+  {% endfor %}</tbody>
+</table>
+
+{% if findings %}
+<h2>Problems</h2>
+<ul>{% for f in findings %}<li class="sev-error"><code>{{ f.code }}</code> {{ f.message }}</li>{% endfor %}</ul>
+{% endif %}
+{% if part.notes %}<h2>Notes</h2><p>{{ part.notes }}</p>{% endif %}
+
+<h2>History</h2>
+{% if history %}
+<table><tbody>{% for h in history %}<tr><td class="mono">{{ h.commit }}</td><td>{{ h.date }}</td><td>{{ h.subject }}</td></tr>{% endfor %}</tbody></table>
+{% else %}<p class="muted">Not committed yet.</p>{% endif %}
+<p class="muted mono">{{ part.path }}</p>
+{% endblock %}

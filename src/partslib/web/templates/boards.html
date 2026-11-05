@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Boards{% endblock %}
+{% block main %}
+<h1>Boards</h1>
+{% if boards %}
+<table>
+  <thead><tr><th>Board</th><th>Status</th><th>Scanned at</th><th class="num">Parts</th><th class="num">With IPN</th><th class="num">Errors</th><th class="num">Warnings</th><th class="num">Notes</th></tr></thead>
+  <tbody>
+  {% for b in boards %}
+    <tr>
+      <td><a href="/boards/{{ b.name }}">{{ b.name }}</a><div class="muted mono">{{ b.path }}</div></td>
+      <td>{{ b.status }}</td>
+      <td>{% if b.source %}<span class="mono">{{ b.source[:12] }}</span><div class="muted">{{ b.scanned_at }}</div>{% else %}<span class="muted">not scanned; run <code>partslib scan</code></span>{% endif %}</td>
+      <td class="num">{{ b.parts }}</td>
+      <td class="num">{% if b.parts %}{{ b.with_ipn }} ({{ (100 * b.with_ipn / b.parts) | round | int }}%){% else %}–{% endif %}</td>
+      <td class="num sev-error">{{ b.errors }}</td>
+      <td class="num sev-warning">{{ b.warnings }}</td>
+      <td class="num sev-info">{{ b.infos }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="empty">No boards in <code>boards.yaml</code>.</p>{% endif %}
+{% endblock %}

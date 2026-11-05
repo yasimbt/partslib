@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status, severity %}
+{% block title %}Overview{% endblock %}
+{% block main %}
+<h1>Overview</h1>
+
+<h2>Parts</h2>
+{% if by_category %}
+<table>
+  <thead><tr><th>Category</th>{% for s in statuses %}<th class="num">{{ s }}</th>{% endfor %}<th class="num">Total</th></tr></thead>
+  <tbody>
+  {% for category, counts in by_category.items() %}
+    <tr>
+      <td><a href="/parts?category={{ category }}">{{ category }}</a></td>
+      {% for s in statuses %}<td class="num">{% if counts[s] %}<a href="/parts?category={{ category }}&status={{ s }}">{{ counts[s] }}</a>{% else %}<span class="muted">0</span>{% endif %}</td>{% endfor %}
+      <td class="num">{{ counts.values() | sum }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="empty">No parts yet. Add one with <code>partslib add</code>.</p>{% endif %}
+
+<h2>Boards</h2>
+{% if boards_problem %}<p class="sev-error">boards.yaml: {{ boards_problem }}</p>{% endif %}
+{% if boards %}
+<table>
+  <thead><tr><th>Board</th><th>Status</th><th>Scanned</th><th class="num">Parts</th><th class="num">With IPN</th><th class="num">Errors</th><th class="num">Warnings</th></tr></thead>
+  <tbody>
+  {% for b in boards %}
+    <tr>
+      <td><a href="/boards/{{ b.name }}">{{ b.name }}</a></td>
+      <td>{{ b.status }}</td>
+      <td>{% if b.source %}<span class="mono">{{ b.source[:12] }}</span>{% else %}<span class="muted">not scanned</span>{% endif %}</td>
+      <td class="num">{{ b.parts }}</td>
+      <td class="num">{% if b.parts %}{{ (100 * b.with_ipn / b.parts) | round | int }}%{% else %}–{% endif %}</td>
+      <td class="num sev-error">{{ b.errors }}</td>
+      <td class="num sev-warning">{{ b.warnings }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="empty">No boards in <code>boards.yaml</code>.</p>{% endif %}
+
+<h2>Needs attention</h2>
+{% if findings %}
+<p><span class="sev-error">{{ findings | length }} library problems</span> from <code>partslib check</code>:</p>
+<table>
+  <thead><tr><th>File</th><th>Rule</th><th>Problem</th></tr></thead>
+  <tbody>{% for f in findings %}<tr><td class="mono">{{ f.path }}</td><td class="mono">{{ f.code }}</td><td>{{ f.message }}</td></tr>{% endfor %}</tbody>
+</table>
+{% else %}<p><span class="sev-ok">partslib check passes.</span></p>{% endif %}
+{% if attention %}
+<p>Parts that are retired or have no active MPN:</p>
+<table>
+  <thead><tr><th>IPN</th><th>Status</th><th>Description</th><th class="num">On boards</th></tr></thead>
+  <tbody>{% for p in attention %}<tr><td><a href="/parts/{{ p.ipn }}" class="mono">{{ p.ipn }}</a></td><td>{{ status(p.status) }}</td><td>{{ p.description }}</td><td class="num">{{ p.used }}</td></tr>{% endfor %}</tbody>
+</table>
+{% endif %}
+{% endblock %}

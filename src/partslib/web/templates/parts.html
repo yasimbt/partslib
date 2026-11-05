@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Parts{% endblock %}
+{% block main %}
+<h1>Parts</h1>
+<form class="search" action="/parts" method="get" role="search"
+      hx-get="/parts" hx-target="#results" hx-trigger="input changed delay:200ms from:input, change from:select" hx-push-url="true">
+  <input type="search" name="q" value="{{ q }}" placeholder="1 kΩ, 0603, ≤ 1%" aria-label="Search parts" autofocus>
+  <select name="category" aria-label="Category">
+    <option value="">All categories</option>
+    {% for c in categories %}<option value="{{ c }}" {% if c == category %}selected{% endif %}>{{ c }}</option>{% endfor %}
+  </select>
+  <select name="status" aria-label="Status">
+    <option value="">Any status</option>
+    {% for s in statuses %}<option value="{{ s }}" {% if s == status %}selected{% endif %}>{{ s }}</option>{% endfor %}
+  </select>
+  <noscript><button type="submit">Search</button></noscript>
+</form>
+<p class="hint">Values match any parameter: <code>100nF</code>, <code>4k7</code>. Compare with <code>≤ 1%</code> or <code>&gt;= 50V</code>. Anything else matches text, such as an IPN, MPN or package.</p>
+<div id="results">{% include "_results.html" %}</div>
+{% endblock %}

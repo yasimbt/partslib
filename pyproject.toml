@@ -3,10 +3,10 @@ name = "partslib"
 version = "0.0.0"
 description = "Personal single-source KiCad parts library with a local dashboard"
 requires-python = ">=3.11"
-dependencies = ["pyyaml"]
+dependencies = ["pyyaml", "fastapi", "uvicorn", "jinja2"]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "httpx"]
 
 [project.scripts]
 partslib = "partslib.cli:main"
@@ -21,3 +21,4 @@ packages = ["src/partslib"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]

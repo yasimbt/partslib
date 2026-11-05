@@ -131,46 +131,98 @@ def _hidden_property(name: str, value: str, indent: str) -> str:
     return lines[0] + "".join(f"\n{indent}{line}" for line in lines[1:])
 
 
+def _child_spans(block: str) -> list[tuple[int, int]]:
+    """Return the spans of a block's direct child s-expressions, ignoring parens inside strings."""
+    spans = []
+    in_string = False
+    i = 1
+    while i < len(block) - 1:
+        char = block[i]
+        if in_string:
+            if char == "\\":
+                i += 1
+            elif char == '"':
+                in_string = False
+        elif char == '"':
+            in_string = True
+        elif char == "(":
+            end = block_end(block, i)
+            spans.append((i, end))
+            i = end
+            continue
+        i += 1
+    return spans
+
+
+def _property_name(child: str) -> str | None:
+    match = re.match(r'\(property "((?:[^"\\]|\\.)*)"', child)
+    return match.group(1) if match else None
+
+
 def part_properties(base_block: str, part: Part, reference: str | None = None) -> list[str]:
-    """Return a part's property blocks in the order KiCad writes them, so re-saves diff cleanly."""
+    """Return a part's property blocks in the order KiCad writes them, so re-saves diff cleanly.
+
+    Standard fields keep the base symbol's layout, other base fields follow, then the part's own
+    fields, then KiCad's search metadata. A part's own field replaces a base field of that name.
+    """
     values = part.base_field_values()
     if reference is not None:
         values["Reference"] = reference
+    custom = part.custom_fields()
+    base = {}
+    for start, end in _child_spans(base_block):
+        name = _property_name(base_block[start:end])
+        if name is not None:
+            base[name] = base_block[start:end]
     properties = []
     for field in BASE_FIELDS:
-        block = _find_block(base_block, f"(property {quote(field)}")
-        if block is None:
+        if field not in base:
             raise ValueError(f"base symbol has no {field} property")
-        properties.append(_set_property_value(block, values[field]) if field in values else block)
-    properties += [
-        _hidden_property(name, value, "\t\t") for name, value in part.custom_fields().items()
-    ]
-    for field in METADATA_FIELDS:
-        block = _find_block(base_block, f"(property {quote(field)}")
-        if block is not None:
-            properties.append(block)
+        properties.append(_set_property_value(base[field], values[field]) if field in values else base[field])
+    reserved = {*BASE_FIELDS, *METADATA_FIELDS, *custom}
+    properties += [block for name, block in base.items() if name not in reserved]
+    properties += [_hidden_property(name, value, "\t\t") for name, value in custom.items()]
+    properties += [base[field] for field in METADATA_FIELDS if field in base]
     return properties
 
 
-def derived_symbol(base_name: str, base_block: str, part: Part) -> str:
-    """Return a symbol, named by IPN, that extends the base symbol and fills in every field."""
-    properties = "\n\t\t".join(part_properties(base_block, part))
-    return (
-        f"(symbol {quote(part.ipn)}\n"
-        f"\t\t(extends {quote(base_name)})\n"
-        f"\t\t{properties}\n"
-        "\t\t(embedded_fonts no)\n"
-        "\t)"
+def part_symbol(base_name: str, base_block: str, part: Part, name: str | None = None) -> str:
+    """Return a complete symbol for a part: the base's graphics and pins, with every field filled in.
+
+    Parts are flattened rather than using `extends`, because `extends` only resolves within one
+    file, so the base would have to ship in the library and could be placed without an IPN.
+    `name` overrides the symbol name, as for the `<library>:<IPN>` copy a schematic embeds.
+    """
+    children = _child_spans(base_block)
+    is_property = [_property_name(base_block[start:end]) is not None for start, end in children]
+    if True not in is_property:
+        raise ValueError(f"base symbol {base_name!r} has no properties")
+    first = is_property.index(True)
+    last = len(is_property) - 1 - is_property[::-1].index(True)
+    if not all(is_property[first : last + 1]):
+        raise ValueError(f"base symbol {base_name!r} has other entries between its properties")
+    head = base_block[: children[first][0]]
+    tail = base_block[children[last][1] :]
+    head, renamed = re.subn(
+        rf"^\(symbol {re.escape(quote(base_name))}", lambda m: f"(symbol {quote(name or part.ipn)}", head
     )
+    if renamed != 1:
+        raise ValueError(f"block is not symbol {base_name!r}")
+    # KiCad requires unit names to start with the symbol name, without any library nickname.
+    tail = re.sub(
+        rf'\(symbol {re.escape(quote(base_name))[:-1]}_(\d+_\d+)"',
+        lambda m: f"(symbol {quote(part.ipn)[:-1]}_{m.group(1)}\"",
+        tail,
+    )
+    return head + "\n\t\t".join(part_properties(base_block, part)) + tail
 
 
 def symbol_library(base_blocks: dict[str, str], parts_by_base: dict[str, list[Part]]) -> str:
-    """Return a .kicad_sym file. KiCad resolves `extends` only within one file, so bases go in too."""
-    blocks = []
-    for base_name in sorted(base_blocks):
-        blocks.append(base_blocks[base_name])
-        for part in sorted(parts_by_base.get(base_name, []), key=lambda p: p.ipn):
-            blocks.append(derived_symbol(base_name, base_blocks[base_name], part))
+    """Return a .kicad_sym file with one complete symbol per part, in IPN order. Bases are not included."""
+    entries = sorted(
+        (part.ipn, base_name, part) for base_name, parts in parts_by_base.items() for part in parts
+    )
+    blocks = [part_symbol(base_name, base_blocks[base_name], part) for _ipn, base_name, part in entries]
     body = "".join(f"\t{block}\n" for block in blocks)
     return (
         "(kicad_symbol_lib\n"

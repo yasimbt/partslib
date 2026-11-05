@@ -113,20 +113,6 @@ def library_tables() -> dict[str, str]:
     }
 
 
-def flattened_symbol(block: str) -> str:
-    """The copy of a derived symbol that a schematic embeds, as KiCad would write it."""
-    start = block.index("(symbol", 1)
-    units = re.sub(
-        rf'\(symbol "{BASE_SYMBOL}_(\d+_\d+)"',
-        lambda match: f'(symbol "{PART.ipn}_{match.group(1)}"',
-        block[start:],
-    )
-    head = block[: block.index('(property "Reference"')]
-    head = head.replace(f'(symbol "{BASE_SYMBOL}"', f'(symbol "{LIBRARY}:{PART.ipn}"', 1)
-    properties = "\n\t\t".join(kicadgen.part_properties(block, PART))
-    return f"{head}{properties}\n\t\t{units}"
-
-
 def schematic() -> str:
     root = stable_uuid("schematic")
     block = base_block()
@@ -138,7 +124,7 @@ def schematic() -> str:
 \t(uuid "{root}")
 \t(paper "A4")
 \t(lib_symbols
-\t{flattened_symbol(block)}
+\t{kicadgen.part_symbol(BASE_SYMBOL, block, PART, name=f"{LIBRARY}:{PART.ipn}")}
 \t)
 \t(symbol
 \t\t(lib_id "{LIBRARY}:{PART.ipn}")
@@ -243,9 +229,20 @@ def check_library_files(env: dict[str, str], work: Path) -> None:
     result = cli(env, "sym", "export", "svg", "-s", PART.ipn, "-o", work / "sym", sym_lib)
     svgs = list((work / "sym").glob("*.svg")) if (work / "sym").exists() else []
     report(
-        "KiCad loads the derived symbol from the generated library",
+        "KiCad loads the part's symbol from the generated library",
         result.returncode == 0 and bool(svgs),
         ", ".join(p.name for p in svgs) or result.stderr.strip(),
+    )
+    names = re.findall(r'^\t\(symbol "([^"]*)"', sym_lib.read_text(encoding="utf-8"), re.MULTILINE)
+    report(
+        "The library holds only the part, so nothing without an IPN can be picked",
+        names == [PART.ipn],
+        ", ".join(names),
+    )
+    result = cli(env, "sym", "export", "svg", "-s", BASE_SYMBOL, "-o", work / "nobase", sym_lib)
+    report(
+        "  control: the base symbol cannot be exported from the library",
+        result.returncode != 0 or not list((work / "nobase").glob("*.svg")),
     )
     result = cli(env, "sym", "export", "svg", "-s", "NO-SUCH-PART", "-o", work / "nosym", sym_lib)
     missing = result.returncode != 0 or not list((work / "nosym").glob("*.svg"))
@@ -270,7 +267,7 @@ def check_library_files(env: dict[str, str], work: Path) -> None:
         "KiCad reads and rewrites the symbol library, keeping the part and fields",
         result.returncode == 0
         and f'(symbol "{PART.ipn}"' in after
-        and f'(extends "{BASE_SYMBOL}")' in after
+        and "(extends" not in after
         and all(f'(property "{name}"' in after for name in PART.custom_fields()),
     )
     changed = [

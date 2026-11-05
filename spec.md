@@ -143,7 +143,7 @@ build/
   3dmodels/PL_*.3dshapes/
 ```
 
-- **Symbols:** one derived symbol per part, named by IPN, with the footprint and these fields filled in: `IPN`, `Manufacturer`, `MPN`, `LCSC`, `Datasheet`, `Description`, and the value. Pick a part once and it is fully defined.
+- **Symbols:** one complete symbol per part, named by IPN and flattened from its base symbol, with the footprint and these fields filled in: `IPN`, `Manufacturer`, `MPN`, `LCSC`, `Datasheet`, `Description`, and the value. Pick a part once and it is fully defined. Base symbols are not included, so nothing without an IPN can be placed. (KiCad's `extends` resolves only within one file, so derived symbols would need their bases alongside, and in M0 the bases showed in the symbol chooser.)
 - **Portable paths:** 3D model paths use one variable, `${PARTSLIB}`. No machine-specific absolute paths or versioned variables like `KICAD8_3RD_PARTY`.
 - **Setup:** `partslib install` registers the libraries and sets `${PARTSLIB}`. It refuses to run while KiCad is open and backs up the config first.
 - **Stable names:** a generated library name or IPN never changes, so existing schematics keep resolving.
@@ -246,7 +246,7 @@ Each one is finished when its acceptance test passes.
 
 | # | Deliverable | Acceptance test |
 |---|---|---|
-| M0 | Spike: generate one derived symbol and footprint, and use them in KiCad 10 | A generated part can be placed from KiCad, with all fields present, and shows in the 3D viewer on a clean config |
+| M0 | Spike: generate one symbol and footprint, and use them in KiCad 10 | A generated part can be placed from KiCad, with all fields present, and shows in the 3D viewer on a clean config |
 | M1 | Part schema, `check`, and duplicate detection | Adding `1k`, `1000` and `1K0` versions of the same resistor is rejected; each validation rule has a failing fixture |
 | M2 | `build` and `install`, with 10 real passives | A new KiCad project can use them with no manual library setup |
 | M3 | Board scanner and checks, command line only | Scanning `DEV1_50_2_SGC-LP` at a pinned commit reports the known problems in section 1, without the false results from per-instance references |
@@ -269,11 +269,11 @@ M0 comes first because D3 depends on it. If generated libraries prove unworkable
 
 ## 14. Open questions
 
-1. Should the repo be private on GitHub? Check licence obligations for third-party parts if it is ever public.
+1. Should the repo be private on GitHub? Yes, private, set up later; CI for `check` waits on it. Check licence obligations for third-party parts if it is ever public.
 2. Should passives be pre-populated from a standard series (E24 at 0402, 0603 and 0805) or added only as needed? Default: as needed.
 3. What are the default part preferences, for example JLCPCB basic parts first?
 4. Should symbols follow one visual style, AKL or KiCad stock? Default: KiCad stock style.
 5. Is `partslib` the right name?
-6. `extends` only works within one file, so each generated library contains its base symbols, and those have no IPN. Should parts be flattened into full symbols instead, or should `check` flag a base symbol used on a board?
+6. ~~Derived or flattened symbols?~~ Flattened; see section 6.
 7. Section 6 fills in a value field, which section 5.1 does not define. Should it be derived from `params`, or be a field of its own? Needed by M2.
 8. nixpkgs marks KiCad as broken on Darwin, so the flake cannot pin KiCad on macOS, which section 13 relies on. Should `check` compare `kicad-cli version` against an expected version instead?

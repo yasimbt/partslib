@@ -16,6 +16,8 @@ python -m venv .venv && .venv/bin/pip install -e '.[dev]'
 .venv/bin/partslib --help
 ```
 
+Git LFS hooks exit with an error when `git-lfs` is not on `PATH`, which makes `git switch` report failure after it has already switched. Run git commands inside `nix develop`.
+
 nixpkgs marks KiCad as broken on Darwin, so on macOS the dev shell uses `/Applications/KiCad/KiCad.app` and its version is not pinned by the flake. On Linux the flake provides KiCad.
 
 ## Rules that are easy to break
@@ -27,7 +29,7 @@ nixpkgs marks KiCad as broken on Darwin, so on macOS the dev shell uses `/Applic
 - v1 reads boards and never writes to them, from the dashboard or the scanner.
 - 3D model paths use only `${PARTSLIB}`: no absolute paths or versioned variables like `KICAD8_3RD_PARTY`.
 - Generated output must be stable and diff cleanly. All KiCad file generation goes through one module.
-- KiCad resolves `extends` only within one file, so each generated `.kicad_sym` carries its base symbols.
+- Generated symbols are flattened, one complete symbol per part, with no base symbols in the output: a base could be placed without an IPN. Don't switch to `extends`.
 - Copy third-party parts in individually and record source, licence and version in `assets/provenance.yaml`. Never bulk-import a library.
 - The scanner must expand per-instance references: on reused sheets the `Reference` property is not the real designator.
 - Every validation rule and board check needs a test with a fixture showing that it can fail. `tests/test_check.py` enforces this for every code in `check.RULES`.

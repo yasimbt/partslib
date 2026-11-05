@@ -71,6 +71,7 @@ params:                      # fixed per category; see 5.3
 
 symbol: Resistor:R           # base symbol in this library
 footprint: Resistor:R_0603   # footprint in this library
+footprint_checked: 2026-11-04 # date checked against the datasheet; required to release
 model: Resistor/R_0603.step
 datasheet: https://example.com/datasheet.pdf
 
@@ -83,6 +84,7 @@ mpns:                        # approved manufacturer parts, in preference order
 
 supersedes: null
 superseded_by: null
+near_match_ack: []           # IPNs this part is knowingly similar to (5.3)
 notes: ""
 ```
 
@@ -105,9 +107,10 @@ Each category defines its **identity parameters**, and a part's fingerprint is i
 | IC, FET, connector and other non-commodity parts | MPN-based: one part per device |
 
 - **Exact fingerprint match:** the part is rejected, and the error names the existing IPN.
-- **Near match** (same value and package, different tolerance, say): a warning that must be acknowledged.
+- **Near match** (same value and package, different tolerance, say): a warning that must be acknowledged, by listing the other IPN in `near_match_ack`. `check` fails until it is, so hand edits cannot skip it.
 - **Normalisation:** `1k`, `1000`, `1.0 kΩ` and `1K0` must all compare equal.
 - **Same MPN on two parts:** rejected.
+- **Supersession:** a retired part and the part that replaces it may share an identity or MPN, as with a footprint fix.
 - **Enforcement:** `partslib check` runs in CI, so hand-edited files cannot bypass it.
 
 ### 5.4 Lifecycle
@@ -126,7 +129,7 @@ draft -> released -> deprecated -> obsolete
 Every symbol, footprint and 3D model records where it came from, its licence, and the upstream version.
 
 - **Why:** the current sources have different terms. Alternate KiCad Library is CC-BY-SA and the JLCPCB library is MIT. Copying CC-BY-SA content can carry attribution and share-alike obligations, so the licence must stay attached.
-- **Stored as:** `assets/provenance.yaml`, with a licence report generated from it.
+- **Stored as:** `assets/provenance.yaml`, with a licence report generated from it. Each entry has `kind`, `id` (the reference used in part files), `source`, `licence` and `version`.
 
 ## 6. KiCad integration
 
@@ -271,3 +274,6 @@ M0 comes first because D3 depends on it. If generated libraries prove unworkable
 3. What are the default part preferences, for example JLCPCB basic parts first?
 4. Should symbols follow one visual style, AKL or KiCad stock? Default: KiCad stock style.
 5. Is `partslib` the right name?
+6. `extends` only works within one file, so each generated library contains its base symbols, and those have no IPN. Should parts be flattened into full symbols instead, or should `check` flag a base symbol used on a board?
+7. Section 6 fills in a value field, which section 5.1 does not define. Should it be derived from `params`, or be a field of its own? Needed by M2.
+8. nixpkgs marks KiCad as broken on Darwin, so the flake cannot pin KiCad on macOS, which section 13 relies on. Should `check` compare `kicad-cli version` against an expected version instead?

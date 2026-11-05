@@ -1,0 +1,14 @@
+name: capacitor
+prefix: CAP
+identity: params
+near_match: [capacitance_f, package]
+params:
+  capacitance_f: {kind: quantity, unit: F, identity: true}
+  tolerance_pct: {kind: quantity, unit: pct, identity: true}
+  voltage_v: {kind: quantity, unit: V, identity: true}
+  dielectric:
+    kind: choice
+    identity: true
+    choices: [C0G, X5R, X6S, X7R, X7S, X8R, Y5V, tantalum, aluminium, polymer, film]
+    aliases: {NP0: C0G, aluminum: aluminium}
+  package: {kind: text, identity: true}

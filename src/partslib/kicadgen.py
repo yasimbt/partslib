@@ -95,6 +95,16 @@ def extract_symbol(library_text: str, name: str) -> str:
     return block
 
 
+def pin_numbers(symbol_block: str) -> set[str]:
+    """Return the pin numbers of a complete symbol."""
+    return set(re.findall(r'\(number "((?:[^"\\]|\\.)*)"', symbol_block))
+
+
+def pad_numbers(footprint_text: str) -> set[str]:
+    """Return the numbered pads of a footprint. Unnumbered mechanical pads don't count."""
+    return {number for number in re.findall(r'\(pad "((?:[^"\\]|\\.)*)"', footprint_text) if number}
+
+
 def _set_property_value(property_block: str, value: str) -> str:
     return re.sub(
         r'^(\(property "(?:[^"\\]|\\.)*" )"(?:[^"\\]|\\.)*"',

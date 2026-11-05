@@ -1,13 +1,14 @@
 import pytest
 
-from partslib.cli import COMMANDS, main
+from partslib.cli import PLANNED, build_parser, main
 
 
 def test_cli_exposes_the_commands_in_the_spec():
-    assert set(COMMANDS) == {"check", "build", "install", "add", "scan", "vendor", "serve"}
+    subparsers = build_parser()._subparsers._group_actions[0].choices
+    assert set(subparsers) == {"check", "build", "install", "add", "scan", "vendor", "serve"}
 
 
-@pytest.mark.parametrize("command", COMMANDS)
+@pytest.mark.parametrize("command", PLANNED)
 def test_unimplemented_commands_fail_rather_than_pretend_to_succeed(command, capsys):
     assert main([command]) == 1
     assert "not implemented" in capsys.readouterr().err

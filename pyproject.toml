@@ -3,7 +3,7 @@ name = "partslib"
 version = "0.0.0"
 description = "Personal single-source KiCad parts library with a local dashboard"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["pyyaml"]
 
 [project.optional-dependencies]
 dev = ["pytest"]

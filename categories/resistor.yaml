@@ -1,0 +1,14 @@
+name: resistor
+prefix: RES
+identity: params
+near_match: [resistance_ohm, package]
+params:
+  resistance_ohm: {kind: quantity, unit: ohm, identity: true}
+  tolerance_pct: {kind: quantity, unit: pct, identity: true}
+  power_w: {kind: quantity, unit: W, identity: true}
+  voltage_v: {kind: quantity, unit: V}
+  package: {kind: text, identity: true}
+  technology:
+    kind: choice
+    identity: true
+    choices: [thick_film, thin_film, metal_film, metal_foil, wirewound, carbon_film]

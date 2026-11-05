@@ -1,0 +1,9 @@
+name: ferrite
+prefix: FER
+identity: params
+near_match: [impedance_ohm, frequency_hz, package]
+params:
+  impedance_ohm: {kind: quantity, unit: ohm, identity: true}
+  frequency_hz: {kind: quantity, unit: Hz, identity: true}
+  current_a: {kind: quantity, unit: A, identity: true}
+  package: {kind: text, identity: true}

@@ -1,0 +1,9 @@
+name: inductor
+prefix: IND
+identity: params
+near_match: [inductance_h, package]
+params:
+  inductance_h: {kind: quantity, unit: H, identity: true}
+  current_a: {kind: quantity, unit: A, identity: true}
+  package: {kind: text, identity: true}
+  tolerance_pct: {kind: quantity, unit: pct}

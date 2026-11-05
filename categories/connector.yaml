@@ -1,0 +1,5 @@
+name: connector
+prefix: CON
+identity: mpn
+params:
+  package: {kind: text}

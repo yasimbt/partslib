@@ -4,7 +4,7 @@ Personal, single-source KiCad 10 parts library with a local dashboard. `spec.md`
 
 ## Status
 
-M0 is done: generated libraries work in KiCad 10, so D3 stands. All other milestones are open, and CLI commands exit 1 until their milestone is built. `src/partslib/kicadgen.py` holds the generator, and `.venv/bin/python spikes/m0/run.py` checks its output against KiCad without the GUI. Work follows the milestones in spec section 12, each finished when its acceptance test passes.
+M0 is done: generated libraries work in KiCad 10, so D3 stands. M1 is built (`check` and `add`). Other CLI commands exit 1 until their milestone is built. `src/partslib/kicadgen.py` holds the generator, and `.venv/bin/python spikes/m0/run.py` checks its output against KiCad without the GUI. Work follows the milestones in spec section 12, each finished when its acceptance test passes.
 
 ## Commands
 
@@ -30,5 +30,7 @@ nixpkgs marks KiCad as broken on Darwin, so on macOS the dev shell uses `/Applic
 - KiCad resolves `extends` only within one file, so each generated `.kicad_sym` carries its base symbols.
 - Copy third-party parts in individually and record source, licence and version in `assets/provenance.yaml`. Never bulk-import a library.
 - The scanner must expand per-instance references: on reused sheets the `Reference` property is not the real designator.
-- Every validation rule and board check needs a test with a fixture showing that it can fail.
+- Every validation rule and board check needs a test with a fixture showing that it can fail. `tests/test_check.py` enforces this for every code in `check.RULES`.
+- `check` must report problems in hand-edited files, never crash on them.
+- A stored value must parse back to exactly the same value, or duplicate detection stops working: compare exact Fractions, never floats.
 - Section 10 of the spec waits until M6 is finished. Don't add it early.

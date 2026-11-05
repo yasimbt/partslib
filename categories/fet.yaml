@@ -1,0 +1,5 @@
+name: fet
+prefix: FET
+identity: mpn
+params:
+  package: {kind: text}

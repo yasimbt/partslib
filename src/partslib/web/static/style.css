@@ -36,3 +36,18 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-
 .previews figcaption { font-size: .8rem; color: #555; text-align: center; }
 .refs { font-family: ui-monospace, Menlo, monospace; font-size: .85em; color: var(--muted); }
 .empty { padding: 1rem; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); }
+.actions { display: flex; gap: .5rem; margin: .5rem 0 1rem; }
+.button, button { display: inline-block; padding: .4rem .8rem; border: 1px solid var(--line); border-radius: 6px; background: var(--soft); color: var(--fg); font: inherit; cursor: pointer; }
+.button.primary, button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.button:hover { text-decoration: none; filter: brightness(1.05); }
+form.stack { display: grid; gap: .75rem; max-width: 46rem; }
+form.stack label { display: grid; gap: .2rem; font-size: .9rem; color: var(--muted); }
+form.stack input, form.stack select, form.stack textarea { font: inherit; padding: .4rem .55rem; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); }
+fieldset { border: 1px solid var(--line); border-radius: 8px; padding: .75rem 1rem; display: grid; gap: .6rem; }
+legend { padding: 0 .3rem; color: var(--muted); }
+.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .6rem; }
+.check-ok { color: var(--ok); }
+.problems li { margin: .2rem 0; }
+label.confirm { display: flex; gap: .5rem; align-items: baseline; color: var(--fg); font-size: 1rem; }
+.layout { display: grid; grid-template-columns: minmax(0, 46rem) minmax(16rem, 1fr); gap: 1.5rem; align-items: start; }
+@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }

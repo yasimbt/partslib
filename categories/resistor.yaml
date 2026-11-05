@@ -3,6 +3,11 @@ prefix: RES
 identity: params
 library: PL_Resistor            # generated symbol library; never rename
 value: "{resistance_ohm}Ω"
+description: "{resistance_ohm} {tolerance_pct} {power_w} {technology}, {package}"   # suggested for new parts
+defaults:                 # filled in on the new-part form; still checked before release
+  symbol: Device:R
+  packages:
+    "0603": {footprint: "Resistor_SMD:R_0603_1608Metric", model: "Resistor_SMD/R_0603_1608Metric.step"}
 near_match: [resistance_ohm, package]
 params:
   resistance_ohm: {kind: quantity, unit: ohm, identity: true}

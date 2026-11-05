@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Release {{ part.ipn }}{% endblock %}
+{% block main %}
+<h1>Release <span class="mono">{{ part.ipn }}</span></h1>
+<p>{{ part.description }}</p>
+{% if error %}<p class="sev-error">{{ error }}</p>{% endif %}
+{% if findings %}<p class="sev-error">Cannot release yet:</p>{% include "_problems.html" %}{% endif %}
+{% if part.status != "draft" %}<p class="empty">{{ part.ipn }} is already {{ part.status }}.</p>{% else %}
+<p>{% if part.datasheet %}<a class="button primary" href="{{ part.datasheet }}" target="_blank" rel="noopener noreferrer">Open the datasheet</a>{% else %}<span class="sev-error">No datasheet: add one with Edit first.</span>{% endif %}</p>
+<div class="layout">
+<form class="stack" method="post">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+  <fieldset>
+    <legend>1. Values</legend>
+    <table><tbody>{% for p in params %}<tr><td class="mono">{{ p.name }}</td><td><strong>{{ p.value }}</strong></td></tr>{% endfor %}</tbody></table>
+    <label class="confirm"><input type="checkbox" name="confirm.values" value="yes" required> Every value matches the datasheet.</label>
+  </fieldset>
+  <fieldset>
+    <legend>2. Footprint</legend>
+    <p class="mono">{{ part.footprint or "none" }}</p>
+    {% if part.footprint %}<div class="previews"><figure><img src="/preview/footprint/{{ part.ipn }}.svg" alt="Footprint {{ part.footprint }}"><figcaption>{{ part.footprint }}</figcaption></figure></div>{% endif %}
+    <label class="confirm"><input type="checkbox" name="confirm.footprint" value="yes" required> The pads match the datasheet's land pattern and pinout.</label>
+  </fieldset>
+  <fieldset>
+    <legend>3. Manufacturer part</legend>
+    {% if mpns %}<p><strong>{{ mpns[0].manufacturer }}</strong> <span class="mono">{{ mpns[0].mpn }}</span>{% if mpns[0].lcsc %} · LCSC <span class="mono">{{ mpns[0].lcsc }}</span>{% endif %}</p>{% else %}<p class="sev-error">No MPN: add one with Edit first.</p>{% endif %}
+    <label class="confirm"><input type="checkbox" name="confirm.mpn" value="yes" required> This datasheet is for this MPN.</label>
+    <label>Lifecycle
+      <select name="lifecycle">{% for l in lifecycles %}<option {% if l == (mpns[0].lifecycle if mpns else "") %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+    </label>
+  </fieldset>
+  <p class="muted">Releasing records today as the date you checked the MPN and footprint, sets the status to released, and makes one commit.</p>
+  <button type="submit" class="primary">Release and commit</button>
+</form>
+<aside class="previews">{% if part.symbol %}<figure><img src="/preview/symbol/{{ part.ipn }}.svg" alt="Symbol {{ part.symbol }}"><figcaption>{{ part.symbol }}</figcaption></figure>{% endif %}</aside>
+</div>
+{% endif %}
+{% endblock %}

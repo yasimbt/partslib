@@ -1,0 +1,3 @@
+{% if findings %}
+<ul class="problems">{% for f in findings %}<li class="sev-error"><code>{{ f.code }}</code> {{ f.message }}</li>{% endfor %}</ul>
+{% endif %}

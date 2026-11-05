@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ part.ipn }}{% endblock %}
+{% block main %}
+<h1>Edit <span class="mono">{{ part.ipn }}</span> <span class="muted">{{ part.status }}</span></h1>
+{% if error %}<p class="sev-error">{{ error }}</p>{% endif %}
+{% if findings %}<p class="sev-error">Not saved:</p>{% include "_problems.html" %}{% endif %}
+<form class="stack" method="post">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+  <label>Description <input name="description" value="{{ part.description }}" required></label>
+  <label>Datasheet <input name="datasheet" type="url" value="{{ part.datasheet }}"></label>
+  <fieldset>
+    <legend>Parameters{% if part.status != "draft" %}: fixed once released; create a new part to change them{% endif %}</legend>
+    <div class="row">
+    {% for name, value in raw_params.items() %}
+      <label>{{ name }} <input {% if part.status == "draft" %}name="param.{{ name }}"{% else %}disabled{% endif %} value="{{ value }}"></label>
+    {% endfor %}
+    </div>
+  </fieldset>
+  <fieldset>
+    <legend>Manufacturer parts, in preference order. Changing an MPN clears its verified date.</legend>
+    {% for m in mpns + [{"manufacturer": "", "mpn": "", "lcsc": "", "lifecycle": "unknown"}] %}
+    <div class="row">
+      <label>Manufacturer <input name="mpn.{{ loop.index0 }}.manufacturer" value="{{ m.manufacturer }}"></label>
+      <label>MPN <input name="mpn.{{ loop.index0 }}.mpn" value="{{ m.mpn }}"></label>
+      <label>LCSC <input name="mpn.{{ loop.index0 }}.lcsc" value="{{ m.lcsc }}"></label>
+      <label>Lifecycle <select name="mpn.{{ loop.index0 }}.lifecycle">{% for l in lifecycles %}<option {% if l == m.lifecycle %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+    </div>
+    {% endfor %}
+    <p class="hint">Clear both manufacturer and MPN to remove a row.</p>
+  </fieldset>
+  {% if part.status in ("released", "deprecated") %}
+  <label>Status
+    <select name="status">
+      <option value="">{{ part.status }} (no change)</option>
+      {% if part.status == "released" %}<option value="deprecated">deprecated</option>{% endif %}
+      <option value="obsolete">obsolete</option>
+    </select>
+  </label>
+  {% endif %}
+  <label>Notes <textarea name="notes" rows="3">{{ part.notes }}</textarea></label>
+  <button type="submit" class="primary">Save and commit</button>
+</form>
+{% endblock %}

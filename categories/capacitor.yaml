@@ -3,6 +3,11 @@ prefix: CAP
 identity: params
 library: PL_Capacitor            # generated symbol library; never rename
 value: "{capacitance_f}F"
+description: "{capacitance_f} {tolerance_pct} {voltage_v} {dielectric} MLCC, {package}"   # suggested for new parts
+defaults:                 # filled in on the new-part form; still checked before release
+  symbol: Device:C
+  packages:
+    "0603": {footprint: "Capacitor_SMD:C_0603_1608Metric", model: "Capacitor_SMD/C_0603_1608Metric.step"}
 near_match: [capacitance_f, package]
 params:
   capacitance_f: {kind: quantity, unit: F, identity: true}

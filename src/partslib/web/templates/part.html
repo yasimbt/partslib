@@ -2,7 +2,12 @@
 {% from "_macros.html" import status, refs %}
 {% block title %}{{ part.ipn }}{% endblock %}
 {% block main %}
+{% if saved %}<p class="card">Saved and committed as <span class="mono">{{ saved }}</span>.</p>{% endif %}
 <h1><span class="mono">{{ part.ipn }}</span> {{ status(part.status) }}</h1>
+<p class="actions">
+  {% if part.status == "draft" %}<a class="button primary" href="/parts/{{ part.ipn }}/release">Check against datasheet and release</a>{% endif %}
+  <a class="button" href="/parts/{{ part.ipn }}/edit">Edit</a>
+</p>
 <p>{{ part.description }}{% if part.value %} · <strong>{{ part.value }}</strong>{% endif %}</p>
 {% if part.superseded_by %}<p>Superseded by <a href="/parts/{{ part.superseded_by }}" class="mono">{{ part.superseded_by }}</a>.</p>{% endif %}
 

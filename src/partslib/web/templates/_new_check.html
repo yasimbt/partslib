@@ -1,0 +1,26 @@
+{% if error %}<p class="sev-error">{{ error }}</p>
+{% elif part %}
+<div class="card">
+  <p><strong class="mono">{{ part.ipn }}</strong>{% if value %} · {{ value }}{% endif %}</p>
+  {% if part.description %}<p class="muted">{{ part.description }}</p>{% endif %}
+  {% set exact = findings | selectattr("code", "in", ["duplicate-part", "duplicate-mpn"]) | list %}
+  {% set near = findings | selectattr("code", "equalto", "near-match") | list %}
+  {% set other = findings | rejectattr("code", "in", ["duplicate-part", "duplicate-mpn", "near-match"]) | list %}
+  {% if exact %}
+    <p class="sev-error"><strong>Already in the library:</strong></p>
+    <ul class="problems">{% for f in exact %}<li>{{ f.message }}{% for ipn in f.related if ipn != part.ipn %} · <a href="/parts/{{ ipn }}" target="_blank">open {{ ipn }}</a>{% endfor %}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if near %}
+    <p class="sev-warning"><strong>Similar parts.</strong> Tick to confirm you want both:</p>
+    {% for f in near %}{% for ipn in f.related if ipn != part.ipn %}
+      <label class="confirm"><input type="checkbox" name="ack" value="{{ ipn }}" form="new-part"> keep it alongside <a href="/parts/{{ ipn }}" target="_blank">{{ ipn }}</a></label>
+    {% endfor %}{% endfor %}
+  {% endif %}
+  {% if other %}<p>Still needed:</p><ul class="problems">{% for f in other %}<li class="sev-warning"><code>{{ f.code }}</code> {{ f.message }}</li>{% endfor %}</ul>{% endif %}
+  {% if not findings %}<p class="check-ok">No duplicates. Ready to add.</p>{% endif %}
+</div>
+{% if similar %}
+<p class="muted">Existing parts with this {{ similar[0].category }} value:</p>
+<ul>{% for s in similar %}<li><a href="/parts/{{ s.ipn }}" target="_blank" class="mono">{{ s.ipn }}</a> {{ s.description }}</li>{% endfor %}</ul>
+{% endif %}
+{% endif %}

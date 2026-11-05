@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}New part{% endblock %}
+{% block main %}
+<h1>New part</h1>
+<p class="muted">Added as a draft with the next free IPN, and committed. Release it once you have checked it against its datasheet.</p>
+{% if error %}<p class="sev-error">{{ error }}</p>{% endif %}
+{% if findings %}<p class="sev-error">Not added:</p>{% include "_problems.html" %}{% endif %}
+<div class="layout">
+<form id="new-part" class="stack" method="post" action="/parts/new"
+      hx-post="/parts/new/check" hx-target="#check" hx-trigger="input changed delay:300ms, change">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+  <label>Category
+    <select name="category" hx-get="/parts/new" hx-target="#fields" hx-trigger="change" hx-include="this">
+      {% for c in categories %}<option value="{{ c }}" {% if c == category.name %}selected{% endif %}>{{ c }}</option>{% endfor %}
+    </select>
+  </label>
+  <div id="fields">{% include "_new_fields.html" %}</div>
+  <button type="submit" class="primary">Add draft part and commit</button>
+</form>
+<aside id="check" aria-live="polite"><p class="muted">Fill in the parameters to check for duplicates.</p></aside>
+</div>
+{% endblock %}

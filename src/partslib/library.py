@@ -83,9 +83,27 @@ class Category:
     library: str  # generated symbol library name, permanent once used
     value: str  # template for the Value field, such as "{resistance_ohm}Ω" or "{mpn}"
     near_match: tuple[str, ...] = ()
+    description: str | None = None  # template suggested for new parts
+    default_symbol: str | None = None
+    package_defaults: dict[str, dict[str, str]] = field(default_factory=dict)  # package -> footprint, model
 
     def identity_params(self) -> list[Param]:
         return [param for param in self.params.values() if param.identity]
+
+    def render_description(self, normalised: dict[str, Fraction | str]) -> str | None:
+        """Suggest a description from the template, or None if there is none."""
+        if self.description is None:
+            return None
+        values = {}
+        for name, value in normalised.items():
+            param = self.params.get(name)
+            if isinstance(value, Fraction):
+                unit = param.unit if param else ""
+                symbol = {"ohm": "Ω", "pct": "%"}.get(unit, unit)
+                values[name] = format_engineering(value) + symbol
+            else:
+                values[name] = value.replace("_", " ")
+        return self.description.format(**values)
 
     def render_value(self, normalised: dict[str, Fraction | str], mpn: str) -> str:
         """Fill in the Value template. Quantities use engineering notation, such as 4.7k or 100n."""
@@ -156,7 +174,20 @@ def _parse_category(raw: dict) -> Category:
         if field_name != "mpn" and not (field_name in params and params[field_name].identity):
             # Only identity params are always present, so only they can be in the value.
             raise ValueError(f"value template names {field_name!r}, which is not an identity param")
-    return Category(raw["name"], raw["prefix"], identity, params, library, value, near_match)
+    description = raw.get("description")
+    if description is not None:
+        for _text, field_name, _spec, _conversion in string.Formatter().parse(description):
+            if field_name is not None and not (field_name in params and params[field_name].identity):
+                raise ValueError(f"description template names {field_name!r}, which is not an identity param")
+    defaults = raw.get("defaults") or {}
+    packages = {
+        str(package): {k: str(v) for k, v in (values or {}).items() if k in ("footprint", "model")}
+        for package, values in (defaults.get("packages") or {}).items()
+    }
+    return Category(
+        raw["name"], raw["prefix"], identity, params, library, value, near_match,
+        description, defaults.get("symbol"), packages,
+    )
 
 
 def part_paths(root: Path) -> list[Path]:

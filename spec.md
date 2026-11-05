@@ -211,6 +211,10 @@ Dashboard edits write the YAML files and create a git commit, so the history sta
 - **Search:** terms separated by commas must all match. A value such as `100nF` or `4k7` matches any parameter with that value; `≤`, `≥`, `<` and `>` compare; anything else, including bare numbers like `0603`, matches text.
 - **Previews:** rendered by `kicad-cli` from the part's base symbol and footprint in `assets/`, with a private KiCad config, and cached under `build/previews/`.
 - **Where used** depends on the `IPN` field on board symbols, so a board shows here only once its parts carry IPNs (section 9).
+- **Editing:** every change is checked first, with the same rules as `check` including history, then written and committed as one commit of that one file; anything else staged is left alone. Problems elsewhere in the library do not block an unrelated edit.
+- **New part:** the category's `description` template and per-package `defaults` (symbol, footprint, model) fill in what is left empty, so a commodity passive needs only its values and MPN.
+- **Release:** a draft is released from its own page, with the datasheet link, values, footprint preview and MPN side by side. Three confirmations (values, footprint, MPN) are required; releasing records today as `verified` and `footprint_checked`.
+- **Safety:** forms carry a secret per server run, and requests with another `Host` or a cross-site `Origin` are refused, so other web pages cannot make the browser edit or commit.
 
 ## 9. Migrating existing boards
 

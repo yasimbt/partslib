@@ -1,0 +1,32 @@
+<fieldset>
+  <legend>Parameters</legend>
+  <div class="row">
+  {% for p in category.params.values() %}
+    <label>{{ p.name }}{% if p.identity %} *{% endif %}
+      {% if p.kind == "choice" %}
+        <select name="param.{{ p.name }}"><option value=""></option>{% for c in p.choices %}<option {% if values.get("param." ~ p.name) == c %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
+      {% else %}
+        <input name="param.{{ p.name }}" value="{{ values.get('param.' ~ p.name, '') }}" {% if p.kind == "quantity" %}placeholder="{{ {'ohm': '4k7', 'F': '100n', 'H': '10u', 'V': '50V', 'W': '0.1W', 'A': '1A', 'Hz': '100MHz', 'pct': '1%'}.get(p.unit, '') }}"{% elif p.name == "package" %}placeholder="0603"{% endif %} autocomplete="off">
+      {% endif %}
+    </label>
+  {% endfor %}
+  </div>
+  <p class="hint">* identity: these decide whether it duplicates an existing part.</p>
+</fieldset>
+<fieldset>
+  <legend>Manufacturer part</legend>
+  <div class="row">
+    <label>Manufacturer <input name="mpn.0.manufacturer" value="{{ values.get('mpn.0.manufacturer', '') }}"></label>
+    <label>MPN <input name="mpn.0.mpn" value="{{ values.get('mpn.0.mpn', '') }}" autocomplete="off"></label>
+    <label>LCSC <input name="mpn.0.lcsc" value="{{ values.get('mpn.0.lcsc', '') }}" placeholder="C21190"></label>
+  </div>
+</fieldset>
+<label>Description <input name="description" value="{{ values.get('description', '') }}" placeholder="left empty: suggested from the parameters"></label>
+<label>Datasheet <input name="datasheet" type="url" value="{{ values.get('datasheet', '') }}" placeholder="https://"></label>
+<fieldset>
+  <legend>Assets{% if category.package_defaults %}: filled in for {{ category.package_defaults | list | join(", ") }} when left empty{% endif %}</legend>
+  <label>Symbol <input name="symbol" value="{{ values.get('symbol', '') }}" placeholder="{{ category.default_symbol or 'Library:Symbol' }}"></label>
+  <label>Footprint <input name="footprint" value="{{ values.get('footprint', '') }}" placeholder="Library:Footprint"></label>
+  <label>3D model <input name="model" value="{{ values.get('model', '') }}" placeholder="Library/Model.step"></label>
+</fieldset>
+<label>Notes <textarea name="notes" rows="2">{{ values.get('notes', '') }}</textarea></label>

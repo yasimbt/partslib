@@ -2,22 +2,26 @@
 
 from collections import Counter, defaultdict
 import csv
+from datetime import date
 from fractions import Fraction
 import hashlib
 import io
 import json
 import os
 from pathlib import Path
+import secrets
 import subprocess
 import tempfile
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from partslib import edit
+from partslib.check import LIFECYCLES
 from partslib.index import _natural, connect, where_used
-from partslib.library import load_categories
+from partslib.library import LibraryError, load_categories
 from partslib.quantity import format_engineering
 from partslib.scan import CHECKS, KICAD_CLI, SEVERITY_ORDER
 from partslib.search import Candidate, matches, parse_query
@@ -34,12 +38,38 @@ def _quantity_text(value: str, unit: str) -> str:
         return value
 
 
-def create_app(root: Path) -> FastAPI:
+LOCAL_HOSTS = ("127.0.0.1", "localhost")
+
+
+def create_app(root: Path, allowed_hosts: tuple[str, ...] = LOCAL_HOSTS) -> FastAPI:
     root = root.resolve()
     app = FastAPI(title="partslib", docs_url=None, redoc_url=None, openapi_url=None)
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     templates = Jinja2Templates(directory=HERE / "templates")
     templates.env.globals["severity_order"] = SEVERITY_ORDER
+    # A secret per server run. Any web page the user visits can make their browser post to
+    # 127.0.0.1, but it cannot read this token, so it cannot make edits or commits.
+    token = secrets.token_urlsafe(32)
+    templates.env.globals["csrf_token"] = token
+
+    @app.middleware("http")
+    async def guard(request: Request, call_next):
+        host = (request.headers.get("host") or "").rsplit(":", 1)[0].strip("[]")
+        if host not in allowed_hosts:
+            # Refusing other Host names stops DNS rebinding: a hostile domain resolving to 127.0.0.1.
+            return PlainTextResponse("partslib only answers on 127.0.0.1", status_code=403)
+        if request.method == "POST":
+            origin = request.headers.get("origin")
+            if origin and origin.split("://", 1)[-1].rsplit(":", 1)[0] not in allowed_hosts:
+                return PlainTextResponse("cross-site request refused", status_code=403)
+        return await call_next(request)
+
+    async def posted(request: Request):
+        """The submitted form, if it carries this run's token. Every POST route reads its form here."""
+        form = await request.form()
+        if not secrets.compare_digest(str(form.get("csrf", "")), token):
+            raise HTTPException(403, "missing or stale form token; reload the page")
+        return form
 
     def page(request: Request, name: str, status_code: int = 200, **context) -> HTMLResponse:
         return templates.TemplateResponse(request, name, context, status_code=status_code)
@@ -129,8 +159,139 @@ def create_app(root: Path) -> FastAPI:
             return page(request, "_results.html", **context)
         return page(request, "parts.html", **context)
 
+    def form_lists(form) -> tuple[dict[str, str], dict[str, str], list[dict[str, str]], list[str]]:
+        fields = {k: str(v) for k, v in form.items() if k in ("description", "datasheet", "notes", "symbol", "footprint", "model")}
+        params = {k.removeprefix("param."): str(v) for k, v in form.items() if k.startswith("param.")}
+        rows: dict[int, dict[str, str]] = defaultdict(dict)
+        for key, value in form.items():
+            if key.startswith("mpn."):
+                _prefix, index, name = key.split(".", 2)
+                rows[int(index)][name] = str(value)
+        mpns = [rows[i] for i in sorted(rows)]
+        return fields, params, mpns, [str(v) for v in form.getlist("ack")]
+
+    def category_fields(category_name: str) -> dict:
+        categories = load_categories(root)
+        category = categories.get(category_name) or categories[sorted(categories)[0]]
+        return {"category": category, "categories": sorted(categories)}
+
+    def similar_parts(db, category, record) -> list[dict]:
+        """Existing parts in the category sharing the first identity value, for the new-part form."""
+        if record is None or not category.identity_params():
+            return []
+        first = category.identity_params()[0].name
+        if first not in record.normalised:
+            return []
+        wanted = str(record.normalised[first])
+        found = []
+        for row in db.execute("select * from parts where category = ? order by ipn", (category.name,)):
+            if json.loads(row["normalised"]).get(first) == wanted:
+                found.append(dict(row))
+        return found
+
+    @app.get("/parts/new", response_class=HTMLResponse)
+    def new_part_form(request: Request, category: str = "resistor"):
+        context = category_fields(category)
+        if request.headers.get("HX-Request"):
+            return page(request, "_new_fields.html", values={}, **context)
+        return page(request, "new_part.html", values={}, findings=[], **context)
+
+    @app.post("/parts/new/check", response_class=HTMLResponse)
+    async def new_part_check(request: Request):
+        form = await posted(request)
+        fields, params, mpns, acks = form_lists(form)
+        try:
+            path, part = edit.draft_part(root, str(form.get("category", "")), fields, params, mpns, acks)
+        except (edit.EditError, LibraryError) as error:
+            return page(request, "_new_check.html", error=str(error), findings=[], part=None, similar=[])
+        findings, record = edit.evaluate(root, path, part)
+        category = load_categories(root)[part["category"]]
+        with connect(root) as db:
+            similar = similar_parts(db, category, record)
+        value = ""
+        if record is not None:
+            try:
+                value = category.render_value(record.normalised, part["mpns"][0]["mpn"] if part["mpns"] else "")
+            except (KeyError, IndexError, ValueError):
+                value = ""
+        return page(request, "_new_check.html", error=None, findings=findings, part=part, value=value, similar=similar)
+
+    @app.post("/parts/new", response_class=HTMLResponse)
+    async def new_part_create(request: Request):
+        form = await posted(request)
+        fields, params, mpns, acks = form_lists(form)
+        values = {k: str(v) for k, v in form.items()}
+        try:
+            path, part = edit.draft_part(root, str(form.get("category", "")), fields, params, mpns, acks)
+            commit = edit.create(root, path, part)
+        except edit.Rejected as rejected:
+            return page(request, "new_part.html", status_code=422, values=values, findings=rejected.findings,
+                        **category_fields(str(form.get("category", ""))))
+        except (edit.EditError, LibraryError) as error:
+            return page(request, "new_part.html", status_code=422, values=values, findings=[], error=str(error),
+                        **category_fields(str(form.get("category", ""))))
+        return RedirectResponse(f"/parts/{part['ipn']}?saved={commit[:12]}", status_code=303)
+
+    @app.get("/parts/{ipn}/release", response_class=HTMLResponse)
+    def release_form(request: Request, ipn: str):
+        return release_page(request, ipn, findings=[], error=None)
+
+    def release_page(request: Request, ipn: str, findings, error, status_code: int = 200):
+        with connect(root) as db:
+            row = db.execute("select * from parts where ipn = ?", (ipn,)).fetchone()
+            if row is None:
+                raise HTTPException(404, f"no part {ipn}")
+            mpns = [dict(r) for r in db.execute("select * from mpns where ipn = ? order by position", (ipn,))]
+        part = dict(row)
+        return page(request, "release.html", status_code=status_code, part=part, mpns=mpns,
+                    params=_params(root, part), lifecycles=LIFECYCLES, findings=findings, error=error)
+
+    @app.post("/parts/{ipn}/release", response_class=HTMLResponse)
+    async def release_submit(request: Request, ipn: str):
+        form = await posted(request)
+        confirmations = ("values", "footprint", "mpn")
+        missing = [c for c in confirmations if form.get(f"confirm.{c}") != "yes"]
+        if missing:
+            return release_page(request, ipn, findings=[], status_code=422,
+                                error="Tick all three checks to release; they record that you compared the part with its datasheet.")
+        try:
+            commit = edit.release(root, ipn, str(form.get("lifecycle") or "unknown"), date.today())
+        except edit.Rejected as rejected:
+            return release_page(request, ipn, findings=rejected.findings, error=None, status_code=422)
+        except edit.EditError as error:
+            return release_page(request, ipn, findings=[], error=str(error), status_code=422)
+        return RedirectResponse(f"/parts/{ipn}?saved={commit[:12]}", status_code=303)
+
+    @app.get("/parts/{ipn}/edit", response_class=HTMLResponse)
+    def edit_form(request: Request, ipn: str):
+        return edit_page(request, ipn, findings=[], error=None)
+
+    def edit_page(request: Request, ipn: str, findings, error, status_code: int = 200):
+        with connect(root) as db:
+            row = db.execute("select * from parts where ipn = ?", (ipn,)).fetchone()
+            if row is None:
+                raise HTTPException(404, f"no part {ipn}")
+            mpns = [dict(r) for r in db.execute("select * from mpns where ipn = ? order by position", (ipn,))]
+        part = dict(row)
+        category = load_categories(root).get(part["category"])
+        return page(request, "edit.html", status_code=status_code, part=part, mpns=mpns,
+                    raw_params=json.loads(part["params"]), category=category, lifecycles=LIFECYCLES,
+                    findings=findings, error=error)
+
+    @app.post("/parts/{ipn}/edit", response_class=HTMLResponse)
+    async def edit_submit(request: Request, ipn: str):
+        form = await posted(request)
+        fields, params, mpns, _acks = form_lists(form)
+        try:
+            commit = edit.update(root, ipn, fields, params or None, mpns, str(form.get("status") or "") or None)
+        except edit.Rejected as rejected:
+            return edit_page(request, ipn, findings=rejected.findings, error=None, status_code=422)
+        except edit.EditError as error:
+            return edit_page(request, ipn, findings=[], error=str(error), status_code=422)
+        return RedirectResponse(f"/parts/{ipn}?saved={commit[:12]}", status_code=303)
+
     @app.get("/parts/{ipn}", response_class=HTMLResponse)
-    def part(request: Request, ipn: str):
+    def part(request: Request, ipn: str, saved: str = ""):
         with connect(root) as db:
             row = db.execute("select * from parts where ipn = ?", (ipn,)).fetchone()
             if row is None:
@@ -142,15 +303,7 @@ def create_app(root: Path) -> FastAPI:
             provenance = {
                 (r["kind"], r["id"]): dict(r) for r in db.execute("select * from provenance")
             }
-        category = load_categories(root).get(data["category"])
-        normalised = json.loads(data["normalised"])
-        params = []
-        for name, raw in json.loads(data["params"]).items():
-            param = category.params.get(name) if category else None
-            shown = raw
-            if param is not None and param.kind == "quantity" and name in normalised:
-                shown = _quantity_text(normalised[name], param.unit)
-            params.append({"name": name, "value": shown, "identity": bool(param and param.identity)})
+        params = _params(root, data)
         assets = [
             {"kind": kind, "id": data[key], "provenance": provenance.get((kind, data[key]))}
             for kind, key in (("symbol", "symbol"), ("footprint", "footprint"), ("model", "model"))
@@ -166,6 +319,7 @@ def create_app(root: Path) -> FastAPI:
             findings=findings,
             assets=assets,
             history=_history(root, data["path"]),
+            saved=saved,
         )
 
     @app.get("/preview/{kind}/{ipn}.svg")
@@ -238,6 +392,19 @@ def create_app(root: Path) -> FastAPI:
         )
 
     return app
+
+
+def _params(root: Path, part: dict) -> list[dict]:
+    category = load_categories(root).get(part["category"])
+    normalised = json.loads(part["normalised"])
+    params = []
+    for name, raw in json.loads(part["params"]).items():
+        param = category.params.get(name) if category else None
+        shown = raw
+        if param is not None and param.kind == "quantity" and name in normalised:
+            shown = _quantity_text(normalised[name], param.unit)
+        params.append({"name": name, "value": shown, "identity": bool(param and param.identity)})
+    return params
 
 
 def _is_number(value: str) -> bool:

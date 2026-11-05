@@ -22,7 +22,7 @@ def site(library, tmp_path):
     config.mkdir()
     write(library, "boards.yaml", f"- name: demo\n  path: {board}\n  status: in_design\n")
     save(library, scan(library, BoardEntry("demo", board, "", "", "in_design"), None, config))
-    return library, TestClient(create_app(library))
+    return library, TestClient(create_app(library, allowed_hosts=("testserver",)))
 
 
 def test_acceptance_which_boards_use_a_part_is_found_in_well_under_10_seconds(site):
@@ -141,10 +141,10 @@ def test_unknown_part_and_board_are_404_pages(site):
         assert response.status_code == 404 and "<html" in response.text
 
 
-def test_the_dashboard_is_read_only(site):
+def test_only_the_editing_routes_accept_posts(site):
     _root, client = site
-    app_routes = [r for r in client.app.routes if getattr(r, "methods", None)]
-    assert app_routes and all(r.methods <= {"GET", "HEAD"} for r in app_routes)
+    posts = sorted(r.path for r in client.app.routes if "POST" in (getattr(r, "methods", None) or ()))
+    assert posts == ["/parts/new", "/parts/new/check", "/parts/{ipn}/edit", "/parts/{ipn}/release"]
 
 
 def test_page_text_is_escaped(site):

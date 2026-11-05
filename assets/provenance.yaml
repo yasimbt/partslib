@@ -1,4 +1,9 @@
 # Source, licence and upstream version of every symbol, footprint and 3D model (spec section 5.5).
 # Each entry: {kind: symbol | footprint | model, id: <reference used in part files>,
-#              source: <where it came from>, licence: <SPDX id>, version: <upstream version>}
-[]
+#              source: <where it came from>, licence: <SPDX expression>, version: <upstream version>}
+- {kind: symbol, id: "Device:C", source: KiCad official libraries, as installed with KiCad, licence: CC-BY-SA-4.0 WITH KiCad-libraries-exception, version: "10.0.8"}
+- {kind: symbol, id: "Device:R", source: KiCad official libraries, as installed with KiCad, licence: CC-BY-SA-4.0 WITH KiCad-libraries-exception, version: "10.0.8"}
+- {kind: footprint, id: "Capacitor_SMD:C_0603_1608Metric", source: KiCad official libraries, as installed with KiCad, licence: CC-BY-SA-4.0 WITH KiCad-libraries-exception, version: "10.0.8"}
+- {kind: footprint, id: "Resistor_SMD:R_0603_1608Metric", source: KiCad official libraries, as installed with KiCad, licence: CC-BY-SA-4.0 WITH KiCad-libraries-exception, version: "10.0.8"}
+- {kind: model, id: "Capacitor_SMD/C_0603_1608Metric.step", source: KiCad official libraries, as installed with KiCad, licence: CC-BY-SA-4.0 WITH KiCad-libraries-exception, version: "10.0.8"}
+- {kind: model, id: "Resistor_SMD/R_0603_1608Metric.step", source: KiCad official libraries, as installed with KiCad, licence: CC-BY-SA-4.0 WITH KiCad-libraries-exception, version: "10.0.8"}

@@ -4,7 +4,7 @@ Personal, single-source KiCad 10 parts library with a local dashboard. `spec.md`
 
 ## Status
 
-M0 is done: generated libraries work in KiCad 10, so D3 stands. M1 is built (`check` and `add`). Other CLI commands exit 1 until their milestone is built. `src/partslib/kicadgen.py` holds the generator, and `.venv/bin/python spikes/m0/run.py` checks its output against KiCad without the GUI. Work follows the milestones in spec section 12, each finished when its acceptance test passes.
+M0 and M1 are done. M2 (`build`, `install`) is built, but its acceptance is pending: the 12 imported 0603 passives stay drafts until the user checks them through the M5 dashboard, so `build` generates nothing from the real library yet. M3 and M4 must work with draft parts. `scan`, `serve` and `vendor` exit 1 until their milestones. `src/partslib/kicadgen.py` holds all KiCad output. `spikes/m0/run.py` and `spikes/m2/acceptance.py` check output against KiCad without the GUI; both run on copies or in their own directories. Work follows the milestones in spec section 12, each finished when its acceptance test passes.
 
 ## Commands
 
@@ -35,4 +35,8 @@ nixpkgs marks KiCad as broken on Darwin, so on macOS the dev shell uses `/Applic
 - Every validation rule and board check needs a test with a fixture showing that it can fail. `tests/test_check.py` enforces this for every code in `check.RULES`.
 - `check` must report problems in hand-edited files, never crash on them.
 - A stored value must parse back to exactly the same value, or duplicate detection stops working: compare exact Fractions, never floats.
+- Never mark a part released, or set `verified` or `footprint_checked`, without the user having checked it against the datasheet. Those fields are the user's attestation.
+- Never run `partslib install` against the user's real KiCad config without asking: test with `--config-dir` on a copy.
+- `build/` is what KiCad loads after `install`. Don't delete it from scripts or tests; spikes write to their own subdirectories.
+- Commit STEP files from inside `nix develop`, so the git LFS filter runs.
 - Section 10 of the spec waits until M6 is finished. Don't add it early.

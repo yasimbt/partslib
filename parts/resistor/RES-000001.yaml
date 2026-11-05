@@ -1,0 +1,25 @@
+ipn: RES-000001
+status: draft
+category: resistor
+description: 0 Ω 1% 0.1 W thick film, 0603
+params:
+  resistance_ohm: 0
+  tolerance_pct: 1
+  power_w: 0.1
+  voltage_v: 75
+  package: '0603'
+  technology: thick_film
+symbol: Device:R
+footprint: Resistor_SMD:R_0603_1608Metric
+footprint_checked: null
+model: Resistor_SMD/R_0603_1608Metric.step
+datasheet: https://www.lcsc.com/datasheet/lcsc_datasheet_2411221126_UNI-ROYAL-Uniroyal-Elec-0603WAF0000T5E_C21189.pdf
+mpns:
+- manufacturer: UNI-ROYAL
+  mpn: 0603WAF0000T5E
+  lcsc: C21189
+  lifecycle: unknown
+  verified: null
+supersedes: null
+superseded_by: null
+notes: 'Imported 2026-11-05 from the C21189 fields on DEV1_50_2_SGC-LP (JLCPCB catalogue data). Not yet checked against the datasheet: set mpns[0].verified and footprint_checked, then release.'

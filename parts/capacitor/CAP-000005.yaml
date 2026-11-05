@@ -1,0 +1,24 @@
+ipn: CAP-000005
+status: draft
+category: capacitor
+description: 1 µF 10% 50 V X5R MLCC, 0603
+params:
+  capacitance_f: 1u
+  tolerance_pct: 10
+  voltage_v: 50
+  dielectric: X5R
+  package: '0603'
+symbol: Device:C
+footprint: Capacitor_SMD:C_0603_1608Metric
+footprint_checked: null
+model: Capacitor_SMD/C_0603_1608Metric.step
+datasheet: https://www.lcsc.com/datasheet/lcsc_datasheet_2304140030_Samsung-Electro-Mechanics-CL10A105KB8NNNC_C15849.pdf
+mpns:
+- manufacturer: Samsung Electro-Mechanics
+  mpn: CL10A105KB8NNNC
+  lcsc: C15849
+  lifecycle: unknown
+  verified: null
+supersedes: null
+superseded_by: null
+notes: 'Imported 2026-11-05 from the C15849 fields on DEV1_50_2_SGC-LP (JLCPCB catalogue data). Not yet checked against the datasheet: set mpns[0].verified and footprint_checked, then release.'

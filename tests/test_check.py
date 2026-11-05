@@ -8,6 +8,7 @@ import subprocess
 import pytest
 import yaml
 
+from partslib.build import build_library
 from partslib.check import RULES, check_library
 from partslib.cli import main
 
@@ -52,6 +53,11 @@ PROVENANCE = """\
 SYMBOL_LIBRARY = """\
 (kicad_symbol_lib
 \t(symbol "R"
+\t\t(property "Reference" "R" (at 0 0 0))
+\t\t(property "Value" "R" (at 0 0 0))
+\t\t(property "Footprint" "" (at 0 0 0))
+\t\t(property "Datasheet" "" (at 0 0 0))
+\t\t(property "Description" "Resistor" (at 0 0 0))
 \t\t(symbol "R_1_1"
 \t\t\t(pin passive line (at 0 3.81 270) (length 1.27) (name "") (number "1"))
 \t\t\t(pin passive line (at 0 -3.81 90) (length 1.27) (name "") (number "2"))
@@ -61,8 +67,10 @@ SYMBOL_LIBRARY = """\
 """
 FOOTPRINT = """\
 (footprint "R_0603"
+\t(property "Value" "R_0603")
 \t(pad "1" smd roundrect (at -0.8 0) (size 0.9 0.9) (layers "F.Cu"))
 \t(pad "2" smd roundrect (at 0.8 0) (size 0.9 0.9) (layers "F.Cu"))
+\t(model "${KICAD10_3DMODEL_DIR}/Resistor_SMD.3dshapes/R_0603_1608Metric.step")
 )
 """
 
@@ -175,6 +183,14 @@ def unknown_key(root):
 
 def missing_key(root):
     edit(root, RESISTOR, "description: 1 kΩ 1% 0.1 W thick film, 0603\n", "")
+
+
+def field_invalid_description(root):
+    edit(root, RESISTOR, "description: 1 kΩ 1% 0.1 W thick film, 0603", "description: [a, b]")
+
+
+def field_invalid_notes(root):
+    edit(root, RESISTOR, 'notes: ""', "notes: {a: 1}")
 
 
 def ipn_format(root):
@@ -335,11 +351,31 @@ def history_status(root):
     edit(root, RESISTOR, "status: released", "status: draft")
 
 
+def build_invalid(root):
+    edit(root, "assets/footprints/Resistor.pretty/R_0603.kicad_mod", "\t(model ", "\t(not_a_model ")
+
+
+def build_modified(root):
+    assert build_library(root)[0] == []
+    edit(root, "build/footprints/PL_Resistor.pretty/R_0603.kicad_mod", "(pad \"1\"", "(pad \"9\"")
+
+
+def build_modified_extra_file(root):
+    assert build_library(root)[0] == []
+    write(root, "build/symbols/PL_Mine.kicad_sym", "(kicad_symbol_lib)\n")
+
+
+def build_stale(root):
+    assert build_library(root)[0] == []
+    edit(root, RESISTOR, "description: 1 kΩ", "description: One kΩ")
+
+
 CASES = {
     "yaml-invalid": [yaml_invalid, yaml_duplicate_key, yaml_not_utf8, yaml_unhashable_key, yaml_impossible_date],
     "not-mapping": [not_mapping],
     "unknown-key": [unknown_key],
     "missing-key": [missing_key],
+    "field-invalid": [field_invalid_description, field_invalid_notes],
     "ipn-format": [ipn_format],
     "ipn-prefix": [ipn_prefix],
     "path-mismatch": [path_mismatch],
@@ -369,6 +405,9 @@ CASES = {
     "history-deleted": [history_deleted],
     "history-identity": [history_identity],
     "history-status": [history_status],
+    "build-invalid": [build_invalid],
+    "build-modified": [build_modified, build_modified_extra_file],
+    "build-stale": [build_stale],
 }
 
 

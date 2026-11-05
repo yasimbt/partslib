@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """M0 spike: can generated standard libraries work in KiCad 10 (spec D3, section 12)?
 
-Generates one derived symbol and footprint into build/, makes a project in build/m0-project/ that
+Generates one symbol and footprint into build/m0-spike/, makes a project in it that
 uses them, and checks as much of the M0 acceptance test as can run without the GUI. Everything runs
 against an empty KiCad config directory; the real one is never read or written.
 
@@ -26,7 +26,8 @@ from partslib import kicadgen
 from partslib.kicadgen import Part, quote
 
 REPO = Path(__file__).resolve().parents[2]
-BUILD = REPO / "build"
+# Its own directory: build/ itself is what `partslib install` points KiCad at.
+BUILD = REPO / "build/m0-spike"
 PROJECT = BUILD / "m0-project"
 APP = Path(os.environ.get("KICAD_APP", "/Applications/KiCad/KiCad.app"))
 KICAD_CLI = APP / "Contents/MacOS/kicad-cli"
@@ -310,6 +311,7 @@ def check_library_resolution(env: dict[str, str], work: Path) -> None:
     )
 
     control = work / "no-tables"
+    shutil.rmtree(control, ignore_errors=True)
     shutil.copytree(PROJECT, control)
     (control / "sym-lib-table").unlink()
     (control / "fp-lib-table").unlink()

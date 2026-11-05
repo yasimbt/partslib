@@ -1,6 +1,8 @@
 name: ferrite
 prefix: FER
 identity: params
+library: PL_Ferrite            # generated symbol library; never rename
+value: "{impedance_ohm}Ω@{frequency_hz}Hz"
 near_match: [impedance_ohm, frequency_hz, package]
 params:
   impedance_ohm: {kind: quantity, unit: ohm, identity: true}

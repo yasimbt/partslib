@@ -131,7 +131,7 @@ def _hidden_property(name: str, value: str, indent: str) -> str:
     return lines[0] + "".join(f"\n{indent}{line}" for line in lines[1:])
 
 
-def _child_spans(block: str) -> list[tuple[int, int]]:
+def child_spans(block: str) -> list[tuple[int, int]]:
     """Return the spans of a block's direct child s-expressions, ignoring parens inside strings."""
     spans = []
     in_string = False
@@ -170,7 +170,7 @@ def part_properties(base_block: str, part: Part, reference: str | None = None) -
         values["Reference"] = reference
     custom = part.custom_fields()
     base = {}
-    for start, end in _child_spans(base_block):
+    for start, end in child_spans(base_block):
         name = _property_name(base_block[start:end])
         if name is not None:
             base[name] = base_block[start:end]
@@ -193,7 +193,7 @@ def part_symbol(base_name: str, base_block: str, part: Part, name: str | None = 
     file, so the base would have to ship in the library and could be placed without an IPN.
     `name` overrides the symbol name, as for the `<library>:<IPN>` copy a schematic embeds.
     """
-    children = _child_spans(base_block)
+    children = child_spans(base_block)
     is_property = [_property_name(base_block[start:end]) is not None for start, end in children]
     if True not in is_property:
         raise ValueError(f"base symbol {base_name!r} has no properties")
@@ -217,12 +217,13 @@ def part_symbol(base_name: str, base_block: str, part: Part, name: str | None = 
     return head + "\n\t\t".join(part_properties(base_block, part)) + tail
 
 
-def symbol_library(base_blocks: dict[str, str], parts_by_base: dict[str, list[Part]]) -> str:
-    """Return a .kicad_sym file with one complete symbol per part, in IPN order. Bases are not included."""
-    entries = sorted(
-        (part.ipn, base_name, part) for base_name, parts in parts_by_base.items() for part in parts
-    )
-    blocks = [part_symbol(base_name, base_blocks[base_name], part) for _ipn, base_name, part in entries]
+def symbol_library(entries: list[tuple[str, str, Part]]) -> str:
+    """Return a .kicad_sym file with one complete symbol per part, in IPN order. Bases are not included.
+
+    Each entry is (base symbol name, base symbol block, part).
+    """
+    ordered = sorted(entries, key=lambda entry: entry[2].ipn)
+    blocks = [part_symbol(base_name, base_block, part) for base_name, base_block, part in ordered]
     body = "".join(f"\t{block}\n" for block in blocks)
     return (
         "(kicad_symbol_lib\n"
@@ -268,9 +269,8 @@ def write_category(
     for directory in (symbols_dir, footprints_dir, models_dir):
         directory.mkdir(parents=True, exist_ok=True)
 
-    (symbols_dir / f"{library}.kicad_sym").write_text(
-        symbol_library(base_blocks, parts_by_base), encoding="utf-8"
-    )
+    entries = [(name, base_blocks[name], part) for name, parts in parts_by_base.items() for part in parts]
+    (symbols_dir / f"{library}.kicad_sym").write_text(symbol_library(entries), encoding="utf-8")
     for name, source_text in footprints.items():
         model_name = f"{name}.step"
         uri = "${PARTSLIB}/3dmodels/" + f"{library}.3dshapes/{model_name}"

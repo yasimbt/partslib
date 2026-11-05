@@ -129,3 +129,23 @@ def plain_number(value: Fraction) -> int | float | str:
     if Fraction(Decimal(repr(as_float))) == value:
         return as_float
     return f"{value.numerator}/{value.denominator}"
+
+
+_DISPLAY_PREFIXES = [("G", 9), ("M", 6), ("k", 3), ("", 0), ("m", -3), ("u", -6), ("n", -9), ("p", -12)]
+
+
+def format_engineering(value: Fraction) -> str:
+    """Write a value for people, such as 4.7k, 100n or 0. Exact up to 6 significant digits."""
+    if value == 0:
+        return "0"
+    for prefix, exponent in _DISPLAY_PREFIXES:
+        scaled = value / Fraction(10) ** exponent
+        if scaled >= 1 or exponent == -12:
+            number = Decimal(scaled.numerator) / Decimal(scaled.denominator)
+            text = f"{number:.6g}"
+            if "e" in text:
+                text = f"{number:f}"
+            if "." in text:
+                text = text.rstrip("0").rstrip(".")
+            return text + prefix
+    raise AssertionError("unreachable")

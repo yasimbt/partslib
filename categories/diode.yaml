@@ -1,5 +1,7 @@
 name: diode
 prefix: DIO
 identity: mpn
+library: PL_Diode            # generated symbol library; never rename
+value: "{mpn}"
 params:
   package: {kind: text}

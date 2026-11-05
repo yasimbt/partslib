@@ -1,0 +1,24 @@
+ipn: CAP-000003
+status: draft
+category: capacitor
+description: 10 nF 10% 50 V X7R MLCC, 0603
+params:
+  capacitance_f: 10n
+  tolerance_pct: 10
+  voltage_v: 50
+  dielectric: X7R
+  package: '0603'
+symbol: Device:C
+footprint: Capacitor_SMD:C_0603_1608Metric
+footprint_checked: null
+model: Capacitor_SMD/C_0603_1608Metric.step
+datasheet: https://www.lcsc.com/datasheet/lcsc_datasheet_2304140030_FH--Guangdong-Fenghua-Advanced-Tech-0603B103K500NT_C57112.pdf
+mpns:
+- manufacturer: FH (Guangdong Fenghua Advanced Tech)
+  mpn: 0603B103K500NT
+  lcsc: C57112
+  lifecycle: unknown
+  verified: null
+supersedes: null
+superseded_by: null
+notes: 'Imported 2026-11-05 from the C57112 fields on DEV1_50_2_SGC-LP (JLCPCB catalogue data). Not yet checked against the datasheet: set mpns[0].verified and footprint_checked, then release.'

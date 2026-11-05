@@ -1,0 +1,24 @@
+ipn: CAP-000001
+status: draft
+category: capacitor
+description: 10 pF 5% 50 V C0G MLCC, 0603
+params:
+  capacitance_f: 10p
+  tolerance_pct: 5
+  voltage_v: 50
+  dielectric: C0G
+  package: '0603'
+symbol: Device:C
+footprint: Capacitor_SMD:C_0603_1608Metric
+footprint_checked: null
+model: Capacitor_SMD/C_0603_1608Metric.step
+datasheet: https://www.lcsc.com/datasheet/lcsc_datasheet_2304140030_Samsung-Electro-Mechanics-CL10C100JB8NNNC_C1634.pdf
+mpns:
+- manufacturer: Samsung Electro-Mechanics
+  mpn: CL10C100JB8NNNC
+  lcsc: C1634
+  lifecycle: unknown
+  verified: null
+supersedes: null
+superseded_by: null
+notes: 'Imported 2026-11-05 from the C1634 fields on DEV1_50_2_SGC-LP (JLCPCB catalogue data). Not yet checked against the datasheet: set mpns[0].verified and footprint_checked, then release.'

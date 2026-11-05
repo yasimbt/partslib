@@ -28,6 +28,7 @@ RULES = {
     "not-mapping": "file does not contain a mapping",
     "unknown-key": "file has a key that is not in the schema",
     "missing-key": "file lacks a required key",
+    "field-invalid": "description or notes is not text, or description is empty",
     "ipn-format": "IPN is not <CAT>-<6 digits>",
     "ipn-prefix": "IPN prefix does not match the category",
     "path-mismatch": "file is not at parts/<category>/<IPN>.yaml",
@@ -53,7 +54,11 @@ RULES = {
     "history-deleted": "a part in the compared revision no longer exists",
     "history-identity": "a non-draft part's identity params changed",
     "history-status": "a part's status moved backwards",
+    "build-invalid": "parts pass every other rule but cannot be generated",
+    "build-modified": "a file under build/ differs from what `partslib build` wrote",
+    "build-stale": "build/ is out of date with parts/ and assets/",
 }
+BUILD_RULES = ("build-modified", "build-stale")
 
 REQUIRED_KEYS = ("ipn", "status", "category", "description", "params")
 OPTIONAL_KEYS = (
@@ -148,6 +153,11 @@ def parse_record(path: str, source: str | bytes, categories: dict[str, Category]
     for key in REQUIRED_KEYS:
         if key not in raw:
             add("missing-key", f"missing key {key!r}")
+
+    if "description" in raw and not (isinstance(raw["description"], str) and raw["description"].strip()):
+        add("field-invalid", "description must be non-empty text")
+    if raw.get("notes") is not None and not isinstance(raw["notes"], str):
+        add("field-invalid", "notes must be text")
 
     if "status" in raw and raw["status"] not in STATUSES:
         add("status-invalid", f"status {raw['status']!r} is not one of {', '.join(STATUSES)}")
@@ -554,17 +564,59 @@ def check_records(
     provenance = load_provenance(root, findings)
     assets = Assets(root)
     for record in records:
-        if record.status == "released":
+        # Retired parts are still generated, so they must stay as complete as when released.
+        if record.status in ("released", *RETIRED):
             check_released(record, assets, provenance, findings)
     return records, findings
 
 
-def check_library(root: Path, since: str | None = None) -> tuple[int, list[Finding]]:
-    """Return the number of part files and every finding. Raises LibraryError on bad configuration."""
+def check_build(root: Path, records: list[Record], findings: list[Finding], include_build_dir: bool) -> None:
+    """Generation must succeed, and build/ must be exactly what the last build wrote, and current."""
+    from partslib import build  # build imports this module
+
+    manifest = build.read_manifest(root) if include_build_dir else None
+    if manifest is not None:
+        actual = build.built_files(root)
+        for path in sorted(set(manifest) | set(actual)):
+            if manifest.get(path) != actual.get(path):
+                findings.append(
+                    Finding(
+                        f"{build.BUILD_DIR}/{path}",
+                        "build-modified",
+                        "differs from what `partslib build` wrote; changes here are overwritten, "
+                        "so make them in parts/ or assets/",
+                    )
+                )
+    if findings and any(f.code not in BUILD_RULES for f in findings):
+        return  # generating from invalid parts would only repeat those problems
+    try:
+        expected = build.generate(root, records)
+    except build.BuildError as error:
+        findings.append(Finding("parts", "build-invalid", str(error)))
+        return
+    if manifest is not None:
+        if {path: build.digest(data) for path, data in expected.items()} != manifest:
+            findings.append(
+                Finding(
+                    f"{build.BUILD_DIR}/{build.MANIFEST}",
+                    "build-stale",
+                    "build/ is out of date with parts/ and assets/; run `partslib build`",
+                )
+            )
+
+
+def check_library(
+    root: Path, since: str | None = None, include_build_dir: bool = True
+) -> tuple[int, list[Finding]]:
+    """Return the number of part files and every finding. Raises LibraryError on bad configuration.
+
+    `include_build_dir=False` skips the rules about build/'s contents, which a rebuild fixes anyway.
+    """
     categories = load_categories(root)
     sources = {path.as_posix(): (root / path).read_bytes() for path in part_paths(root)}
     records, findings = check_records(root, sources, categories)
     revision = since or default_revision(root)
     if revision is not None:
         check_history(root, revision, records, categories, findings)
+    check_build(root, records, findings, include_build_dir)
     return len(sources), sorted(findings)

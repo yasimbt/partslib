@@ -1,5 +1,7 @@
 name: other
 prefix: OTH
 identity: mpn
+library: PL_Other            # generated symbol library; never rename
+value: "{mpn}"
 params:
   package: {kind: text}

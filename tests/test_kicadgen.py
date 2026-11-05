@@ -135,8 +135,8 @@ def test_part_symbol_requires_the_standard_fields():
 
 def test_library_output_is_stable_whatever_the_part_order():
     other = Part("RES-000124", "2k", "2 kΩ", "", "PL_Resistor:R_0603", "ACME", "A2")
-    first = symbol_library({"R": BASE}, {"R": [PART, other]})
-    second = symbol_library({"R": BASE}, {"R": [other, PART]})
+    first = symbol_library([("R", BASE, PART), ("R", BASE, other)])
+    second = symbol_library([("R", BASE, other), ("R", BASE, PART)])
     assert first == second
     assert first.index('"RES-000123"') < first.index('"RES-000124"')
     assert '(symbol "R"' not in first, "the base must not be pickable without an IPN"

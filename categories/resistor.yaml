@@ -1,6 +1,8 @@
 name: resistor
 prefix: RES
 identity: params
+library: PL_Resistor            # generated symbol library; never rename
+value: "{resistance_ohm}Ω"
 near_match: [resistance_ohm, package]
 params:
   resistance_ohm: {kind: quantity, unit: ohm, identity: true}

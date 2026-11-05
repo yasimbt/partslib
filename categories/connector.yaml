@@ -1,5 +1,7 @@
 name: connector
 prefix: CON
 identity: mpn
+library: PL_Connector            # generated symbol library; never rename
+value: "{mpn}"
 params:
   package: {kind: text}

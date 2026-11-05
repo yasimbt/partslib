@@ -4,10 +4,11 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from pathlib import Path
 import re
+import string
 
 import yaml
 
-from partslib.quantity import UNITS, parse_quantity
+from partslib.quantity import UNITS, format_engineering, parse_quantity
 
 
 class LibraryError(Exception):
@@ -79,10 +80,20 @@ class Category:
     prefix: str
     identity: str  # params | mpn
     params: dict[str, Param]
+    library: str  # generated symbol library name, permanent once used
+    value: str  # template for the Value field, such as "{resistance_ohm}Ω" or "{mpn}"
     near_match: tuple[str, ...] = ()
 
     def identity_params(self) -> list[Param]:
         return [param for param in self.params.values() if param.identity]
+
+    def render_value(self, normalised: dict[str, Fraction | str], mpn: str) -> str:
+        """Fill in the Value template. Quantities use engineering notation, such as 4.7k or 100n."""
+        values = {
+            name: format_engineering(value) if isinstance(value, Fraction) else value
+            for name, value in normalised.items()
+        }
+        return self.value.format(**values, mpn=mpn)
 
 
 def load_categories(root: Path) -> dict[str, Category]:
@@ -99,6 +110,8 @@ def load_categories(root: Path) -> dict[str, Category]:
         if category.prefix in prefixes:
             raise LibraryError(f"{path}: prefix {category.prefix} is also used by {prefixes[category.prefix]}")
         prefixes[category.prefix] = category.name
+        if any(other.library == category.library for other in categories.values()):
+            raise LibraryError(f"{path}: library {category.library} is also used by another category")
         categories[category.name] = category
     if not categories:
         raise LibraryError(f"no category definitions in {root / 'categories'}")
@@ -131,7 +144,19 @@ def _parse_category(raw: dict) -> Category:
     unknown = [name for name in near_match if name not in params]
     if unknown:
         raise ValueError(f"near_match names unknown params: {unknown}")
-    return Category(raw["name"], raw["prefix"], identity, params, near_match)
+    library = raw["library"]
+    if not re.fullmatch(r"PL_\w+", library):
+        raise ValueError(f"library {library!r} must be PL_<name>")
+    value = raw["value"]
+    for _text, field_name, spec, conversion in string.Formatter().parse(value):
+        if field_name is None:
+            continue
+        if spec or conversion:
+            raise ValueError(f"value template {value!r} may only name fields")
+        if field_name != "mpn" and not (field_name in params and params[field_name].identity):
+            # Only identity params are always present, so only they can be in the value.
+            raise ValueError(f"value template names {field_name!r}, which is not an identity param")
+    return Category(raw["name"], raw["prefix"], identity, params, library, value, near_match)
 
 
 def part_paths(root: Path) -> list[Path]:

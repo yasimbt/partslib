@@ -1,5 +1,7 @@
 name: fet
 prefix: FET
 identity: mpn
+library: PL_FET            # generated symbol library; never rename
+value: "{mpn}"
 params:
   package: {kind: text}

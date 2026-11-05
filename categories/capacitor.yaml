@@ -1,6 +1,8 @@
 name: capacitor
 prefix: CAP
 identity: params
+library: PL_Capacitor            # generated symbol library; never rename
+value: "{capacitance_f}F"
 near_match: [capacitance_f, package]
 params:
   capacitance_f: {kind: quantity, unit: F, identity: true}

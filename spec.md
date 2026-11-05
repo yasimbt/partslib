@@ -144,10 +144,13 @@ build/
 ```
 
 - **Symbols:** one complete symbol per part, named by IPN and flattened from its base symbol, with the footprint and these fields filled in: `IPN`, `Manufacturer`, `MPN`, `LCSC`, `Datasheet`, `Description`, and the value. Pick a part once and it is fully defined. Base symbols are not included, so nothing without an IPN can be placed. (KiCad's `extends` resolves only within one file, so derived symbols would need their bases alongside, and in M0 the bases showed in the symbol chooser.)
+- **Footprint and model libraries** are named after the asset library they come from, as `PL_<library>`, so `Resistor_SMD:R_0603_1608Metric` becomes `PL_Resistor_SMD:R_0603_1608Metric`. Each category file names its symbol library.
+- **Value field:** derived from the part, by a template in its category file: `{resistance_ohm}Ω` gives `2.2Ω` or `43kΩ`, and MPN-based categories use the MPN. It cannot drift from `params`.
+- **Retired parts:** `deprecated` and `obsolete` parts are still generated, so old boards keep working, with the status at the start of their description. They must stay as complete as when released.
 - **Portable paths:** 3D model paths use one variable, `${PARTSLIB}`. No machine-specific absolute paths or versioned variables like `KICAD8_3RD_PARTY`.
-- **Setup:** `partslib install` registers the libraries and sets `${PARTSLIB}`. It refuses to run while KiCad is open and backs up the config first.
+- **Setup:** `partslib install` registers the libraries and sets `${PARTSLIB}`. It refuses to run while KiCad is open and backs up the config first, as `<file>.pre-partslib-<time>`. It only changes table entries named `PL_*` that point into `${PARTSLIB}`, and refuses if a `PL_*` name points anywhere else. It only installs a build that passes `check`.
 - **Stable names:** a generated library name or IPN never changes, so existing schematics keep resolving.
-- **Generated files stay out of normal editing:** a change made to `build/` directly is overwritten, and `partslib check` reports it.
+- **Generated files stay out of normal editing:** a change made to `build/` directly is overwritten, and `partslib check` reports it, using hashes in `build/manifest.json`. `check` also reports a build that is out of date with the parts.
 - **Stock KiCad parts:** allowed by importing them as normal parts, so they get an IPN and stop depending on KiCad's bundled versions.
 
 **Boards at release.** `partslib vendor <board>` copies the board's parts into its project `lib/` folder and rewrites its library table, so the board is self-contained (goal 6). This matches the rule in the SGC SOP that libraries a design depends on live in `hardware/<designator>/lib/`.
@@ -275,5 +278,5 @@ M0 comes first because D3 depends on it. If generated libraries prove unworkable
 4. Should symbols follow one visual style, AKL or KiCad stock? Default: KiCad stock style.
 5. Is `partslib` the right name?
 6. ~~Derived or flattened symbols?~~ Flattened; see section 6.
-7. Section 6 fills in a value field, which section 5.1 does not define. Should it be derived from `params`, or be a field of its own? Needed by M2.
+7. ~~Value field?~~ Derived from `params`; see section 6.
 8. nixpkgs marks KiCad as broken on Darwin, so the flake cannot pin KiCad on macOS, which section 13 relies on. Should `check` compare `kicad-cli version` against an expected version instead?

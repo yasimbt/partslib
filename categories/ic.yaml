@@ -1,5 +1,7 @@
 name: ic
 prefix: IC
 identity: mpn
+library: PL_IC            # generated symbol library; never rename
+value: "{mpn}"
 params:
   package: {kind: text}

@@ -1,6 +1,8 @@
 name: inductor
 prefix: IND
 identity: params
+library: PL_Inductor            # generated symbol library; never rename
+value: "{inductance_h}H"
 near_match: [inductance_h, package]
 params:
   inductance_h: {kind: quantity, unit: H, identity: true}

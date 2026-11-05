@@ -144,7 +144,9 @@ def test_unknown_part_and_board_are_404_pages(site):
 def test_only_the_editing_routes_accept_posts(site):
     _root, client = site
     posts = sorted(r.path for r in client.app.routes if "POST" in (getattr(r, "methods", None) or ()))
-    assert posts == ["/parts/new", "/parts/new/check", "/parts/{ipn}/edit", "/parts/{ipn}/release"]
+    assert posts == [
+        "/import/fetch", "/import/{stage_id}", "/parts/new", "/parts/new/check", "/parts/{ipn}/edit", "/parts/{ipn}/release",
+    ]
 
 
 def test_page_text_is_escaped(site):

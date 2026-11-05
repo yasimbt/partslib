@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import shutil
 import subprocess
 import tempfile
 
@@ -18,7 +19,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse,
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from partslib import edit
+from partslib import edit, importer, sources
 from partslib.check import LIFECYCLES
 from partslib.index import _natural, connect, where_used
 from partslib.library import LibraryError, load_categories
@@ -290,6 +291,78 @@ def create_app(root: Path, allowed_hosts: tuple[str, ...] = LOCAL_HOSTS) -> Fast
             return edit_page(request, ipn, findings=[], error=str(error), status_code=422)
         return RedirectResponse(f"/parts/{ipn}?saved={commit[:12]}", status_code=303)
 
+    @app.get("/import", response_class=HTMLResponse)
+    def import_search(request: Request, q: str = ""):
+        hits, problems = sources.search(q, root / "build") if q.strip() else ([], [])
+        return page(request, "import.html", q=q, hits=hits, problems=problems)
+
+    @app.post("/import/fetch", response_class=HTMLResponse)
+    async def import_fetch(request: Request):
+        form = await posted(request)
+        try:
+            stage_id = importer.stage(root, str(form.get("source", "")), str(form.get("id", "")), str(form.get("footprint", "")))
+        except sources.SourceError as error:
+            return page(request, "import.html", status_code=422, q=str(form.get("q", "")), hits=[], problems=[str(error)])
+        return RedirectResponse(f"/import/{stage_id}", status_code=303)
+
+    def import_page(request: Request, stage_id: str, category: str = "", values: dict | None = None,
+                    findings=(), error: str | None = None, status_code: int = 200):
+        try:
+            _directory, fetched = importer.load_stage(root, stage_id)
+        except sources.SourceError as problem:
+            raise HTTPException(404, str(problem)) from None
+        suggestion = fetched.suggestion
+        context = category_fields(category or suggestion.get("category") or "ic")
+        if values is None:
+            values = {f"param.{k}": v for k, v in (suggestion.get("params") or {}).items()}
+            values.update({
+                "mpn.0.manufacturer": suggestion.get("manufacturer", ""),
+                "mpn.0.mpn": suggestion.get("mpn", ""),
+                "mpn.0.lcsc": suggestion.get("lcsc", ""),
+                "datasheet": suggestion.get("datasheet", ""),
+                "description": suggestion.get("description", ""),
+            })
+        return page(request, "import_confirm.html", status_code=status_code, stage=stage_id, fetched=fetched,
+                    values=values, findings=list(findings), error=error, **context)
+
+    @app.get("/import/{stage_id}", response_class=HTMLResponse)
+    def import_confirm(request: Request, stage_id: str, category: str = ""):
+        return import_page(request, stage_id, category)
+
+    @app.get("/import/{stage_id}/preview/{kind}.svg")
+    def import_preview(stage_id: str, kind: str):
+        try:
+            directory, fetched = importer.load_stage(root, stage_id)
+        except sources.SourceError:
+            raise HTTPException(404) from None
+        if kind == "symbol":
+            svg = _render(root, "symbol", directory / "symbol.kicad_sym", fetched.symbol_name)
+        elif kind == "footprint":
+            pretty = directory / "preview.pretty"
+            pretty.mkdir(exist_ok=True)
+            shutil.copyfile(directory / "footprint.kicad_mod", pretty / f"{fetched.footprint_name}.kicad_mod")
+            svg = _render(root, "footprint", pretty, fetched.footprint_name)
+        else:
+            svg = None
+        if svg is None:
+            raise HTTPException(404, "no preview")
+        return Response(svg, media_type="image/svg+xml")
+
+    @app.post("/import/{stage_id}", response_class=HTMLResponse)
+    async def import_add(request: Request, stage_id: str):
+        form = await posted(request)
+        fields, params, mpns, acks = form_lists(form)
+        category = str(form.get("category", ""))
+        try:
+            ipn, commit = importer.add(root, stage_id, category, fields, params, mpns, acks)
+        except edit.Rejected as rejected:
+            return import_page(request, stage_id, category, {k: str(v) for k, v in form.items()},
+                               rejected.findings, status_code=422)
+        except (edit.EditError, sources.SourceError, LibraryError) as problem:
+            return import_page(request, stage_id, category, {k: str(v) for k, v in form.items()},
+                               error=str(problem), status_code=422)
+        return RedirectResponse(f"/parts/{ipn}?saved={commit[:12]}", status_code=303)
+
     @app.get("/parts/{ipn}", response_class=HTMLResponse)
     def part(request: Request, ipn: str, saved: str = ""):
         with connect(root) as db:
@@ -493,10 +566,15 @@ def _preview(root: Path, kind: str, reference: str) -> bytes | None:
         source = root / "assets/symbols" / f"{library}.kicad_sym"
     else:
         source = root / "assets/footprints" / f"{library}.pretty"
+    return _render(root, kind, source, name)
+
+
+def _render(root: Path, kind: str, source: Path, name: str) -> bytes | None:
+    """Render one symbol from a .kicad_sym, or one footprint from a .pretty, as SVG."""
     target = source / f"{name}.kicad_mod" if kind == "footprint" else source
     if not target.is_file() or not Path(KICAD_CLI).exists():
         return None
-    key = hashlib.sha256(target.read_bytes() + reference.encode()).hexdigest()[:20]
+    key = hashlib.sha256(target.read_bytes() + f"{kind}:{name}".encode()).hexdigest()[:20]
     cache = root / "build/previews" / kind / f"{key}.svg"
     if cache.is_file():
         return cache.read_bytes()

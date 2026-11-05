@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Import {{ fetched.symbol_name }}{% endblock %}
+{% block main %}
+<h1>Import <span class="mono">{{ fetched.symbol_name }}</span></h1>
+<p class="muted">From {{ fetched.provenance.source }} · licence <span class="mono">{{ fetched.provenance.licence }}</span>.
+{% if fetched.provenance.licence == "NOASSERTION" %}The licence of this content is not stated; check it before making the repository public.{% endif %}</p>
+{% if error %}<p class="sev-error">{{ error }}</p>{% endif %}
+{% if findings %}<p class="sev-error">Not added:</p>{% include "_problems.html" %}{% endif %}
+<div class="previews">
+  <figure><img src="/import/{{ stage }}/preview/symbol.svg" alt="Symbol {{ fetched.symbol_name }}"><figcaption>symbol {{ fetched.symbol_library }}:{{ fetched.symbol_name }}</figcaption></figure>
+  <figure><img src="/import/{{ stage }}/preview/footprint.svg" alt="Footprint {{ fetched.footprint_name }}"><figcaption>footprint {{ fetched.footprint_library }}:{{ fetched.footprint_name }}</figcaption></figure>
+  <figure style="display:grid;place-items:center;width:236px"><span class="{{ 'check-ok' if fetched.model_name else 'sev-warning' }}">{{ ("3D model " ~ fetched.model_name) if fetched.model_name else "No 3D model: add one before release" }}</span></figure>
+</div>
+<form class="stack" method="post" action="/import/{{ stage }}" style="margin-top:1rem">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+  <label>Category
+    <select name="category" onchange="location.search = 'category=' + this.value">
+      {% for c in categories %}<option value="{{ c }}" {% if c == category.name %}selected{% endif %}>{{ c }}</option>{% endfor %}
+    </select>
+  </label>
+  {% set show_assets = false %}
+  {% include "_new_fields.html" %}
+  <p class="muted">The part uses the symbol, footprint and 3D model shown above.</p>
+  <button type="submit" class="primary">Add draft part and commit</button>
+</form>
+{% endblock %}

@@ -23,10 +23,12 @@
 </fieldset>
 <label>Description <input name="description" value="{{ values.get('description', '') }}" placeholder="left empty: suggested from the parameters"></label>
 <label>Datasheet <input name="datasheet" type="url" value="{{ values.get('datasheet', '') }}" placeholder="https://"></label>
+{% if show_assets is not defined or show_assets %}
 <fieldset>
   <legend>Assets{% if category.package_defaults %}: filled in for {{ category.package_defaults | list | join(", ") }} when left empty{% endif %}</legend>
   <label>Symbol <input name="symbol" value="{{ values.get('symbol', '') }}" placeholder="{{ category.default_symbol or 'Library:Symbol' }}"></label>
   <label>Footprint <input name="footprint" value="{{ values.get('footprint', '') }}" placeholder="Library:Footprint"></label>
   <label>3D model <input name="model" value="{{ values.get('model', '') }}" placeholder="Library/Model.step"></label>
 </fieldset>
+{% endif %}
 <label>Notes <textarea name="notes" rows="2">{{ values.get('notes', '') }}</textarea></label>

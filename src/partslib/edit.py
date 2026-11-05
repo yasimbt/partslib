@@ -75,35 +75,62 @@ def _git(root: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
-def commit_file(root: Path, path: str, message: str) -> str:
-    """Commit exactly one file, leaving anything else staged or changed alone. Returns the commit."""
-    _git(root, "add", "--", path)
-    # --only commits just this path, whatever else is staged. Git LFS's post-commit hook warns
+def commit_files(root: Path, paths: list[str], message: str) -> str:
+    """Commit exactly these files, leaving anything else staged or changed alone. Returns the commit."""
+    _git(root, "add", "--", *paths)
+    # --only commits just these paths, whatever else is staged. Git LFS's post-commit hook warns
     # outside the dev shell, but git ignores post-commit failures.
-    _git(root, "commit", "--only", "-q", "-m", message, "--", path)
+    _git(root, "commit", "--only", "-q", "-m", message, "--", *paths)
     return _git(root, "rev-parse", "HEAD")
 
 
-def save(root: Path, path: str, part: dict, message: str) -> str:
-    """Check, write and commit one part file. Raises Rejected with the problems if check fails."""
+def save(root: Path, path: str, part: dict, message: str, extra: dict[str, bytes] | None = None) -> str:
+    """Check, write and commit a part file, plus any assets it needs, as one commit.
+
+    The extra files are written first, so the part is checked against them. If check rejects the
+    part, or the commit fails, every file goes back to how it was. Raises Rejected with problems.
+    """
     with _write_lock:
         if _git(root, "rev-parse", "--show-toplevel") != str(root.resolve()):
             raise EditError(f"{root} is not the top of a git repository")
-        findings, _record = evaluate(root, path, part)
-        if findings:
-            raise Rejected(findings)
-        target = root / path
-        previous = target.read_bytes() if target.exists() else None
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(dump_part(part), encoding="utf-8")
+        files = {**(extra or {}), path: dump_part(part).encode("utf-8")}
+        if any(_uses_lfs(root, p) for p in files) and not lfs_available(root):
+            raise EditError(
+                "adding a 3D model needs git LFS: run `partslib serve` inside `nix develop`, "
+                "after `git lfs install --local` once in this clone"
+            )
+        previous = {p: (root / p).read_bytes() if (root / p).exists() else None for p in files}
         try:
-            return commit_file(root, path, message)
-        except EditError:
-            if previous is None:
-                target.unlink(missing_ok=True)
-            else:
-                target.write_bytes(previous)
+            for relative, data in extra.items() if extra else ():
+                (root / relative).parent.mkdir(parents=True, exist_ok=True)
+                (root / relative).write_bytes(data)
+            findings, _record = evaluate(root, path, part)
+            if findings:
+                raise Rejected(findings)
+            (root / path).parent.mkdir(parents=True, exist_ok=True)
+            (root / path).write_bytes(files[path])
+            return commit_files(root, list(files), message)
+        except (Rejected, EditError):
+            for relative, data in previous.items():
+                if data is None:
+                    (root / relative).unlink(missing_ok=True)
+                else:
+                    (root / relative).write_bytes(data)
             raise
+
+
+def _uses_lfs(root: Path, path: str) -> bool:
+    """Whether .gitattributes sends this file to git LFS."""
+    result = subprocess.run(["git", "-C", str(root), "check-attr", "filter", "--", path], capture_output=True, text=True, check=False)
+    return result.stdout.strip().endswith(": filter: lfs")
+
+
+def lfs_available(root: Path) -> bool:
+    """git-lfs is on PATH and this clone uses it. Without `git lfs install`, git has no LFS filter
+    and would silently commit the file itself instead of a pointer."""
+    version = subprocess.run(["git", "-C", str(root), "lfs", "version"], capture_output=True, check=False)
+    clean = subprocess.run(["git", "-C", str(root), "config", "--get", "filter.lfs.clean"], capture_output=True, check=False)
+    return version.returncode == 0 and clean.returncode == 0 and bool(clean.stdout.strip())
 
 
 def load_part(root: Path, ipn: str) -> tuple[str, dict]:

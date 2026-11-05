@@ -217,6 +217,43 @@ def part_symbol(base_name: str, base_block: str, part: Part, name: str | None = 
     return head + "\n\t\t".join(part_properties(base_block, part)) + tail
 
 
+def _split_properties(block: str, name: str) -> tuple[str, list[str], str]:
+    """(text before the properties, property blocks, text after), for a symbol block."""
+    children = child_spans(block)
+    is_property = [_property_name(block[start:end]) is not None for start, end in children]
+    if True not in is_property:
+        raise ValueError(f"symbol {name!r} has no properties")
+    first = is_property.index(True)
+    last = len(is_property) - 1 - is_property[::-1].index(True)
+    if not all(is_property[first : last + 1]):
+        raise ValueError(f"symbol {name!r} has other entries between its properties")
+    properties = [block[start:end] for start, end in children[first : last + 1]]
+    return block[: children[first][0]], properties, block[children[last][1] :]
+
+
+def complete_symbol(library_text: str, name: str) -> str:
+    """Return a symbol as one complete block, resolving `extends` from the same library.
+
+    A derived symbol takes its parent's graphics, pins and flags, with its own properties.
+    """
+    block = _find_block(library_text, f"(symbol {quote(name)}")
+    if block is None:
+        raise KeyError(f"symbol {name!r} not found")
+    parent = re.match(r'\(symbol "[^"]*"\s*\(extends "((?:[^"\\]|\\.)*)"\)', block)
+    if parent is None:
+        return block
+    base = complete_symbol(library_text, parent.group(1))
+    head, _base_properties, tail = _split_properties(base, parent.group(1))
+    _own_head, own_properties, _own_tail = _split_properties(block, name)
+    head = re.sub(rf"^\(symbol {re.escape(quote(parent.group(1)))}", lambda m: f"(symbol {quote(name)}", head)
+    tail = re.sub(
+        rf'\(symbol {re.escape(quote(parent.group(1)))[:-1]}_(\d+_\d+)"',
+        lambda m: f"(symbol {quote(name)[:-1]}_{m.group(1)}\"",
+        tail,
+    )
+    return head + "\n\t\t".join(own_properties) + tail
+
+
 def symbol_library(entries: list[tuple[str, str, Part]]) -> str:
     """Return a .kicad_sym file with one complete symbol per part, in IPN order. Bases are not included.
 

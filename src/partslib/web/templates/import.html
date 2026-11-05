@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Import{% endblock %}
+{% block main %}
+<h1>Import a part</h1>
+<p class="muted">Search LCSC/JLCPCB and KiCad's own libraries. Adding fetches the symbol, footprint and 3D model, and shows them before anything is saved. Imported parts start as drafts.</p>
+<form class="search" method="get" action="/import" role="search">
+  <input type="search" name="q" value="{{ q }}" placeholder="MPN, LCSC number or KiCad symbol: STM32G474RE, C21190, opamp SOIC-8" aria-label="Search sources" autofocus>
+  <button type="submit" class="primary">Search</button>
+</form>
+{% for p in problems %}<p class="sev-warning">{{ p }}</p>{% endfor %}
+{% if q and not hits and not problems %}<p class="empty">Nothing found for {{ q }}.</p>{% endif %}
+{% if hits %}
+<table>
+  <thead><tr><th>Source</th><th>Part</th><th>Manufacturer</th><th>Package</th><th>Description</th><th></th></tr></thead>
+  <tbody>
+  {% for h in hits %}
+    <tr>
+      <td>{% if h.source == "lcsc" %}LCSC <span class="mono muted">{{ h.id }}</span>{% if h.extra.type %}<div class="muted">{{ h.extra.type }}</div>{% endif %}{% else %}KiCad <span class="muted">{{ h.extra.library }}</span>{% endif %}</td>
+      <td class="mono">{{ h.name }}</td>
+      <td>{{ h.manufacturer }}</td>
+      <td>{{ h.package }}</td>
+      <td>{{ h.description }}{% if h.datasheet %} · <a href="{{ h.datasheet }}" target="_blank" rel="noopener noreferrer">datasheet</a>{% endif %}</td>
+      <td>
+        <form method="post" action="/import/fetch">
+          <input type="hidden" name="csrf" value="{{ csrf_token }}">
+          <input type="hidden" name="source" value="{{ h.source }}">
+          <input type="hidden" name="id" value="{{ h.id }}">
+          <input type="hidden" name="q" value="{{ q }}">
+          {% if h.source == "kicad" %}<input name="footprint" value="{{ h.footprint }}" placeholder="Footprint, e.g. Resistor_SMD:R_0603_1608Metric" aria-label="Footprint for {{ h.name }}" size="28">{% endif %}
+          <button type="submit">Add</button>
+        </form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

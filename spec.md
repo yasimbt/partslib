@@ -203,6 +203,7 @@ Local web app at `http://127.0.0.1:<port>`, started with `partslib serve`.
 | **New part** | Form that runs the duplicate check as you type, and shows existing matches first |
 | **Boards** | All boards, with status, part count, percentage of parts with an IPN, and check results |
 | **Board detail** | BOM grouped by IPN, failed checks with the designators involved, and changes between commits. CSV export |
+| **Import** | Search LCSC/JLCPCB and KiCad's installed libraries for a part, and add it with its symbol, footprint and 3D model (section 8.1) |
 | **Migration** | Unmatched parts on a board, with suggested IPNs (section 9) |
 
 Dashboard edits write the YAML files and create a git commit, so the history stays complete. It binds to localhost only.
@@ -215,6 +216,17 @@ Dashboard edits write the YAML files and create a git commit, so the history sta
 - **New part:** the category's `description` template and per-package `defaults` (symbol, footprint, model) fill in what is left empty, so a commodity passive needs only its values and MPN.
 - **Release:** a draft is released from its own page, with the datasheet link, values, footprint preview and MPN side by side. Three confirmations (values, footprint, MPN) are required; releasing records today as `verified` and `footprint_checked`.
 - **Safety:** forms carry a secret per server run, and requests with another `Host` or a cross-site `Origin` are refused, so other web pages cannot make the browser edit or commit.
+
+### 8.1 Importing parts
+
+Added 2026-11-05 at the user's request, ahead of M6. It applies D7: one part at a time, with its source recorded.
+
+- **Sources:** KiCad's installed libraries, offline, under `CC-BY-SA-4.0 WITH KiCad-libraries-exception`; and LCSC, searched through the JLCPCB parts catalogue, with CAD data from EasyEDA converted by easyeda2kicad. The LCSC side uses unofficial APIs that can change without notice, and its content's licence is unknown, so provenance records `NOASSERTION`. SnapMagic and Ultra Librarian have no self-serve download API; they can be added the same way once an API key is available.
+- **Flow:** search, then Add fetches the files into `build/import-staging/` and shows the symbol and footprint with a form prefilled from the catalogue. Confirming writes the assets, their provenance entries and a draft part, checked together and committed as one commit; a rejected import writes nothing.
+- **Formats:** imported files are upgraded to the current KiCad format by `kicad-cli`, and derived symbols are made complete.
+- **Existing assets never change:** an identical asset is reused, and a different one with the same name gets a new name.
+- **3D models** need git LFS set up in the clone, so the dashboard must run inside `nix develop` to import one.
+- **Licensing:** easyeda2kicad is AGPL-3.0, so partslib runs it as a separate program and does not import it.
 
 ## 9. Migrating existing boards
 
@@ -287,7 +299,7 @@ M0 comes first because D3 depends on it. If generated libraries prove unworkable
 
 ## 14. Open questions
 
-1. Should the repo be private on GitHub? Yes, private, set up later; CI for `check` waits on it. Check licence obligations for third-party parts if it is ever public.
+1. Should the repo be private on GitHub? Yes, private, set up later; CI for `check` waits on it. Check licence obligations for third-party parts if it is ever public, including parts imported from EasyEDA, whose licence is unknown (`NOASSERTION` in provenance).
 2. Should passives be pre-populated from a standard series (E24 at 0402, 0603 and 0805) or added only as needed? Default: as needed.
 3. What are the default part preferences, for example JLCPCB basic parts first?
 4. Should symbols follow one visual style, AKL or KiCad stock? Default: KiCad stock style.

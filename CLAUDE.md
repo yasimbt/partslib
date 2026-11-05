@@ -4,7 +4,7 @@ Personal, single-source KiCad 10 parts library with a local dashboard. `spec.md`
 
 ## Status
 
-M0 and M1 are done. M2 (`build`, `install`) is built, but its acceptance is pending: the 12 imported 0603 passives stay drafts until the user checks them through the M5 dashboard, so `build` generates nothing from the real library yet. M3 and M4 must work with draft parts. M3 (`scan`) is built; its acceptance test runs against the real board in `~/code/sgc` at commit `daebef2`. M4 (`serve`, the dashboard in `src/partslib/web/`) and M5 (editing: new part, edit, release, each one commit via `src/partslib/edit.py`) are built. DEV1 shows no where-used until M6 puts IPNs on its symbols. `vendor` exits 1 until M7. `src/partslib/kicadgen.py` holds all KiCad output. `spikes/m0/run.py` and `spikes/m2/acceptance.py` check output against KiCad without the GUI; both run on copies or in their own directories. Work follows the milestones in spec section 12, each finished when its acceptance test passes.
+M0 and M1 are done. M2 (`build`, `install`) is built, but its acceptance is pending: the 12 imported 0603 passives stay drafts until the user checks them through the M5 dashboard, so `build` generates nothing from the real library yet. M3 and M4 must work with draft parts. M3 (`scan`) is built; its acceptance test runs against the real board in `~/code/sgc` at commit `daebef2`. M4 (`serve`, the dashboard in `src/partslib/web/`) and M5 (editing: new part, edit, release, each one commit via `src/partslib/edit.py`) are built. DEV1 shows no where-used until M6 puts IPNs on its symbols. Part import (spec 8.1: `sources.py`, `importer.py`, `/import`) was added ahead of M6 at the user's request. `vendor` exits 1 until M7. `src/partslib/kicadgen.py` holds all KiCad output. `spikes/m0/run.py` and `spikes/m2/acceptance.py` check output against KiCad without the GUI; both run on copies or in their own directories. Work follows the milestones in spec section 12, each finished when its acceptance test passes.
 
 ## Commands
 
@@ -14,7 +14,8 @@ git lfs install --local    # once per clone, before committing any 3D model
 python -m venv .venv && .venv/bin/pip install -e '.[dev]'
 .venv/bin/pytest
 .venv/bin/partslib --help
-.venv/bin/partslib serve   # http://127.0.0.1:8765/
+nix develop -c .venv/bin/partslib serve   # http://127.0.0.1:8765/; inside nix so imports can commit 3D models
+.venv/bin/pip install -e '.[import]'      # easyeda2kicad, for importing from LCSC
 ```
 
 Git LFS hooks exit with an error when `git-lfs` is not on `PATH`, which makes `git switch` report failure after it has already switched. Run git commands inside `nix develop`.
@@ -42,5 +43,7 @@ nixpkgs marks KiCad as broken on Darwin, so on macOS the dev shell uses `/Applic
 - Never run `partslib install` against the user's real KiCad config without asking: test with `--config-dir` on a copy.
 - The dashboard binds to 127.0.0.1 only. Every POST route reads its form through `posted()`, which checks the per-run token; keep it that way for new routes. Edits go through `edit.save`, which checks, writes and commits exactly one file.
 - `build/` is what KiCad loads after `install`. Don't delete it from scripts or tests; spikes write to their own subdirectories.
-- Commit STEP files from inside `nix develop`, so the git LFS filter runs.
+- Commit STEP files from inside `nix develop`, so the git LFS filter runs. A fresh clone also needs `git lfs install --local`, or git silently commits the whole file.
+- Run easyeda2kicad as a separate program (`python -m easyeda2kicad`), never import it: it is AGPL-3.0.
+- Tests must not use the network: replace `sources` fetches and searches with fakes, as `tests/test_import.py` does.
 - Section 10 of the spec waits until M6 is finished. Don't add it early.

@@ -19,7 +19,8 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse,
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from partslib import edit, importer, sources
+from partslib import edit, importer, migrate, sources, verify
+from partslib.board import BoardError, load_boards
 from partslib.check import LIFECYCLES
 from partslib.index import _natural, connect, where_used
 from partslib.library import LibraryError, load_categories
@@ -28,6 +29,7 @@ from partslib.scan import CHECKS, KICAD_CLI, SEVERITY_ORDER
 from partslib.search import Candidate, matches, parse_query
 
 HERE = Path(__file__).parent
+SHARED_SYMBOLS = Path(os.environ.get("KICAD_APP", "/Applications/KiCad/KiCad.app")) / "Contents/SharedSupport/symbols"
 STATUSES = ("draft", "released", "deprecated", "obsolete")
 
 
@@ -193,9 +195,10 @@ def create_app(root: Path, allowed_hosts: tuple[str, ...] = LOCAL_HOSTS) -> Fast
     @app.get("/parts/new", response_class=HTMLResponse)
     def new_part_form(request: Request, category: str = "resistor"):
         context = category_fields(category)
+        values = {k: v for k, v in request.query_params.items() if k != "category"}  # prefill, as from migration
         if request.headers.get("HX-Request"):
             return page(request, "_new_fields.html", values={}, **context)
-        return page(request, "new_part.html", values={}, findings=[], **context)
+        return page(request, "new_part.html", values=values, findings=[], **context)
 
     @app.post("/parts/new/check", response_class=HTMLResponse)
     async def new_part_check(request: Request):
@@ -262,6 +265,19 @@ def create_app(root: Path, allowed_hosts: tuple[str, ...] = LOCAL_HOSTS) -> Fast
         except edit.EditError as error:
             return release_page(request, ipn, findings=[], error=str(error), status_code=422)
         return RedirectResponse(f"/parts/{ipn}?saved={commit[:12]}", status_code=303)
+
+    @app.post("/parts/{ipn}/verify", response_class=HTMLResponse)
+    async def verify_submit(request: Request, ipn: str):
+        await posted(request)
+        try:
+            result = verify.verify(root, ipn)
+        except verify.VerifyError as error:
+            return page(request, "verify.html", status_code=422, ipn=ipn, result=None, error=str(error))
+        except (edit.Rejected, edit.EditError) as problem:
+            findings = getattr(problem, "findings", None)
+            message = "; ".join(f.message for f in findings) if findings else str(problem)
+            return page(request, "verify.html", status_code=422, ipn=ipn, result=None, error=f"passed, but could not release: {message}")
+        return page(request, "verify.html", ipn=ipn, result=result, error=None)
 
     @app.get("/parts/{ipn}/edit", response_class=HTMLResponse)
     def edit_form(request: Request, ipn: str):
@@ -445,6 +461,80 @@ def create_app(root: Path, allowed_hosts: tuple[str, ...] = LOCAL_HOSTS) -> Fast
             head=head,
             changes=changes,
         )
+
+    def board_entry(name: str):
+        try:
+            boards = {b.name: b for b in load_boards(root)}
+        except BoardError as error:
+            raise HTTPException(404, str(error)) from None
+        if name not in boards:
+            raise HTTPException(404, f"no board {name}")
+        return boards[name]
+
+    def migration(name: str, commit: str):
+        entry = board_entry(name)
+        try:
+            board, groups = migrate.load(root, entry, commit or None)
+        except BoardError as error:
+            raise HTTPException(404, str(error)) from None
+        categories = load_categories(root)
+        with connect(root) as db:
+            released = {
+                r["ipn"]: f"{categories[r['category']].library}:{r['ipn']}"
+                for r in db.execute("select ipn, category from parts where status = 'released'")
+                if r["category"] in categories
+            }
+        return entry, board, groups, released
+
+    @app.get("/boards/{name}/migrate", response_class=HTMLResponse)
+    def migrate_page(request: Request, name: str, commit: str = "", saved: str = "", error: str = ""):
+        entry, board, groups, released = migration(name, commit)
+        counts = Counter(g.status for g in groups)
+        stock = {p.stem for p in (SHARED_SYMBOLS.glob("*.kicad_sym") if SHARED_SYMBOLS.is_dir() else [])}
+        return page(
+            request, "migrate.html", board=entry, source=board.source.label(), commit=commit, groups=groups,
+            counts=counts, changes=migrate.changes(groups, released), stock_libraries=stock,
+            parts_total=sum(len(g.references) for g in groups),
+            parts_done=sum(len(g.references) for g in groups if g.status == "done"),
+            saved=saved, error=error,
+        )
+
+    @app.post("/boards/{name}/migrate")
+    async def migrate_confirm(request: Request, name: str):
+        form = await posted(request)
+        commit = str(form.get("commit", ""))
+        entry, _board, groups, _released = migration(name, commit)
+        by_key = {g.key: g for g in groups}
+        chosen = []
+        if form.get("all") == "same-mpn":
+            chosen = [(g, g.suggestion["ipn"]) for g in groups
+                      if g.status == "suggested" and g.suggestion and g.suggestion["how"] == "same MPN"]
+        else:
+            group = by_key.get(str(form.get("group", "")))
+            ipn = str(form.get("ipn", "")).strip().upper()
+            if group is None or not ipn:
+                raise HTTPException(422, "choose a group and an IPN")
+            chosen = [(group, ipn)]
+        if not chosen:
+            return RedirectResponse(f"/boards/{name}/migrate?commit={commit}", status_code=303)
+        try:
+            path, data = migrate.confirm(root, entry.name, chosen)
+            summary = ", ".join(f"{ipn} for {g.references[0]}{'…' if len(g.references) > 1 else ''}" for g, ipn in chosen)
+            sha = edit.write_and_commit(root, {path: data}, f"Migrate {entry.name}: confirm {summary}")
+        except (ValueError, edit.EditError) as problem:
+            return RedirectResponse(f"/boards/{name}/migrate?commit={commit}&error={problem}", status_code=303)
+        return RedirectResponse(f"/boards/{name}/migrate?commit={commit}&saved={sha[:12]}", status_code=303)
+
+    @app.get("/boards/{name}/migrate/changes.csv")
+    def migrate_changes(name: str, commit: str = ""):
+        _entry, _board, groups, released = migration(name, commit)
+        out = io.StringIO()
+        writer = csv.writer(out)
+        writer.writerow(["Sheet", "Designators", "Symbol", "Value", "Set IPN to", "Then change symbol to"])
+        for row in migrate.changes(groups, released):
+            writer.writerow([row["sheet_file"], " ".join(row["designators"]), row["lib_id"], row["value"], row["ipn"], row["symbol"]])
+        return Response(out.getvalue(), media_type="text/csv",
+                        headers={"Content-Disposition": f'attachment; filename="{name}-migration.csv"'})
 
     @app.get("/boards/{name}/bom.csv")
     def bom_csv(name: str):

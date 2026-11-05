@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% from "_macros.html" import refs %}
+{% block title %}Migrate {{ board.name }}{% endblock %}
+{% block main %}
+<h1>Migrate {{ board.name }}</h1>
+<p class="muted">Reading the board {% if commit %}at <span class="mono">{{ commit }}</span>{% else %}as on disk, including uncommitted changes{% endif %}.
+  {% if commit %}<a href="/boards/{{ board.name }}/migrate">Read the working tree</a>{% else %}<a href="/boards/{{ board.name }}/migrate?commit=HEAD">Read HEAD</a>{% endif %}.
+  partslib never changes the board: confirm a match here, then set the IPN in KiCad.</p>
+{% if saved %}<p class="card">Confirmed and committed as <span class="mono">{{ saved }}</span>.</p>{% endif %}
+{% if error %}<p class="sev-error">{{ error }}</p>{% endif %}
+
+<p><strong>{{ parts_done }} of {{ parts_total }}</strong> parts have their IPN on the board.
+  {{ counts.confirmed or 0 }} groups confirmed and waiting for KiCad, {{ counts.suggested or 0 }} with a suggestion, {{ counts.unmatched or 0 }} unmatched{% if counts.conflict %}, <span class="sev-error">{{ counts.conflict }} in conflict</span>{% endif %}.</p>
+
+{% set mpn_matches = groups | selectattr("status", "equalto", "suggested") | selectattr("suggestion.how", "equalto", "same MPN") | list %}
+{% if mpn_matches %}
+<form method="post" style="margin:.5rem 0 1rem">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="commit" value="{{ commit }}">
+  <input type="hidden" name="all" value="same-mpn">
+  <button type="submit" class="primary">Confirm all {{ mpn_matches | length }} same-MPN matches</button>
+  <span class="muted">Each has exactly one library part with the MPN already on the board.</span>
+</form>
+{% endif %}
+
+<table>
+  <thead><tr><th>Board parts</th><th>Symbol and value</th><th>MPN · LCSC</th><th>Match</th></tr></thead>
+  <tbody>
+  {% for g in groups %}
+    <tr>
+      <td><span class="badge status-{{ {'done': 'released', 'confirmed': 'released', 'suggested': 'deprecated', 'unmatched': 'draft', 'conflict': 'obsolete'}[g.status] }}">{{ g.status }}</span>
+        <div>{{ refs(g.references, 12) }}</div><div class="muted">{{ g.references | length }} parts · {{ g.category }}</div></td>
+      <td class="mono">{{ g.lib_id }}<div>{{ g.value }}</div><div class="muted">{{ g.footprint or "no footprint" }}</div></td>
+      <td class="mono">{{ g.mpn or "–" }}<div class="muted">{{ g.manufacturer }}</div><div>{{ g.lcsc }}</div></td>
+      <td>
+        {% if g.status == "done" %}<a href="/parts/{{ (g.current_ipns | list)[0] }}" class="mono">{{ (g.current_ipns | list)[0] }}</a> on the board
+        {% elif g.status == "conflict" %}<span class="sev-error">The board has {{ g.current_ipns | reject("equalto", "") | join(", ") or "no IPN" }}{% if g.confirmed %}, confirmed {{ g.confirmed }}{% endif %}{% if "" in g.current_ipns %}, and some designators have none{% endif %}.</span>
+        {% else %}
+          {% if g.confirmed %}<p>Confirmed <a href="/parts/{{ g.confirmed }}" class="mono">{{ g.confirmed }}</a>: set its IPN in KiCad.</p>{% endif %}
+          {% if g.suggestion and not g.confirmed %}<p><a href="/parts/{{ g.suggestion.ipn }}" class="mono" target="_blank">{{ g.suggestion.ipn }}</a> <span class="muted">{{ g.suggestion.how }}</span></p>{% endif %}
+          {% if g.similar %}<p class="muted">Similar: {% for ipn in g.similar %}<a href="/parts/{{ ipn }}" class="mono" target="_blank">{{ ipn }}</a> {% endfor %}</p>{% endif %}
+          <form method="post" class="search" style="margin:.25rem 0">
+            <input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="commit" value="{{ commit }}">
+            <input type="hidden" name="group" value="{{ g.key }}">
+            <input name="ipn" value="{{ g.confirmed or (g.suggestion.ipn if g.suggestion else '') }}" placeholder="IPN" size="12" aria-label="IPN for {{ g.references[0] }}">
+            <button type="submit">{{ "Change" if g.confirmed else "Confirm" }}</button>
+          </form>
+          {% if not g.suggestion and not g.confirmed %}
+          <p class="muted">No library part yet:
+            {% set lib = g.lib_id.split(":")[0] %}
+            {% if lib in stock_libraries %}
+              <form method="post" action="/import/fetch" style="display:inline">
+                <input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="source" value="kicad">
+                <input type="hidden" name="id" value="{{ g.lib_id }}"><input type="hidden" name="footprint" value="{{ g.footprint }}">
+                <button type="submit">Import from KiCad</button>
+              </form>
+            {% endif %}
+            {% if g.lcsc or g.mpn %}<a class="button" href="/import?q={{ (g.lcsc or g.mpn) | urlencode }}">Search LCSC</a>{% endif %}
+            <a class="button" href="/parts/new?category={{ g.category }}{% for k, v in g.params.items() %}&amp;param.{{ k }}={{ v | urlencode }}{% endfor %}{% if g.mpn %}&amp;mpn.0.mpn={{ g.mpn | urlencode }}{% endif %}{% if g.manufacturer %}&amp;mpn.0.manufacturer={{ g.manufacturer | urlencode }}{% endif %}{% if g.lcsc %}&amp;mpn.0.lcsc={{ g.lcsc }}{% endif %}">New part</a>
+          </p>
+          {% endif %}
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Changes to make in KiCad {% if changes %}<a href="/boards/{{ board.name }}/migrate/changes.csv{% if commit %}?commit={{ commit }}{% endif %}" style="font-size:.85rem;font-weight:400">CSV</a>{% endif %}</h2>
+{% if changes %}
+<p class="muted">Set each symbol's <code>IPN</code> field, for example in the Symbol Fields Table. On a reused sheet one symbol covers several designators, so it is one edit.
+  Once a part is released, built and installed, Change Symbol to its <code>PL_</code> library symbol as well; that also brings the library's footprint.</p>
+<table>
+  <thead><tr><th>Sheet</th><th>Designators</th><th>Symbol now</th><th>Set IPN</th><th>Then change symbol to</th></tr></thead>
+  <tbody>{% for c in changes %}
+    <tr><td class="mono">{{ c.sheet_file }}</td><td>{{ refs(c.designators) }}</td><td class="mono">{{ c.lib_id }}<div>{{ c.value }}</div></td>
+      <td class="mono"><strong>{{ c.ipn }}</strong></td><td class="mono">{{ c.symbol or "" }}{% if not c.symbol %}<span class="muted">not released yet</span>{% endif %}</td></tr>
+  {% endfor %}</tbody>
+</table>
+{% else %}<p class="muted">Nothing to change yet: confirm matches above.</p>{% endif %}
+{% endblock %}

@@ -21,7 +21,7 @@ create table meta (key text primary key, value text);
 create table parts (
     ipn text primary key, category text, status text, description text, value text,
     datasheet text, symbol text, footprint text, model text, notes text, path text,
-    params text, normalised text, superseded_by text
+    params text, normalised text, superseded_by text, checked_by text
 );
 create table mpns (ipn text, position integer, manufacturer text, mpn text, lcsc text, lifecycle text, verified text);
 create table library_findings (path text, code text, message text);
@@ -97,7 +97,7 @@ def rebuild(root: Path, target: Path) -> None:
         except (KeyError, IndexError, ValueError):
             value = ""
         db.execute(
-            "insert or ignore into parts values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "insert or ignore into parts values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 record.ipn,
                 raw.get("category"),
@@ -113,6 +113,7 @@ def rebuild(root: Path, target: Path) -> None:
                 json.dumps(raw.get("params") or {}, default=str, ensure_ascii=False),
                 json.dumps({k: _canonical(v) for k, v in record.normalised.items()}, ensure_ascii=False),
                 raw.get("superseded_by") if isinstance(raw.get("superseded_by"), str) else None,
+                raw.get("checked_by") if isinstance(raw.get("checked_by"), str) else None,
             ),
         )
         for position, entry in enumerate(record.mpns):

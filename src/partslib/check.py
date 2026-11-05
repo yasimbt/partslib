@@ -65,6 +65,7 @@ OPTIONAL_KEYS = (
     "symbol",
     "footprint",
     "footprint_checked",
+    "checked_by",
     "model",
     "datasheet",
     "mpns",
@@ -158,6 +159,8 @@ def parse_record(path: str, source: str | bytes, categories: dict[str, Category]
         add("field-invalid", "description must be non-empty text")
     if raw.get("notes") is not None and not isinstance(raw["notes"], str):
         add("field-invalid", "notes must be text")
+    if raw.get("checked_by") is not None and not (isinstance(raw["checked_by"], str) and raw["checked_by"].strip()):
+        add("field-invalid", "checked_by must name what checked the part")
 
     if "status" in raw and raw["status"] not in STATUSES:
         add("status-invalid", f"status {raw['status']!r} is not one of {', '.join(STATUSES)}")

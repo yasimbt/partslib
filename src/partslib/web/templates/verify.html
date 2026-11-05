@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Datasheet check {{ ipn }}{% endblock %}
+{% block main %}
+<h1>Datasheet check: <a href="/parts/{{ ipn }}" class="mono">{{ ipn }}</a></h1>
+{% if error %}<p class="sev-error">{{ error }}</p>
+{% else %}
+{% if result.released %}<p class="card check-ok">Every check passed, so {{ ipn }} is released, committed as <span class="mono">{{ result.released[:12] }}</span>.</p>
+{% elif result.passed %}<p class="card">Every check passed. Nothing was released.</p>
+{% else %}<p class="card sev-warning">Not released: the checks below need you. Fix the part, or <a href="/parts/{{ ipn }}/release">check it yourself</a>.</p>{% endif %}
+<p class="muted">Read by {{ result.model }} from <a href="{{ result.datasheet }}" target="_blank" rel="noopener noreferrer">the datasheet</a>; partslib compared what it found with the part.</p>
+<table>
+  <thead><tr><th>Result</th><th>Check</th><th>Detail</th><th>Evidence</th></tr></thead>
+  <tbody>{% for c in result.checks %}
+    <tr><td class="{{ {'pass': 'check-ok', 'fail': 'sev-error', 'unknown': 'sev-warning'}[c.outcome] }}">{{ {'pass': 'pass', 'fail': 'mismatch', 'unknown': "can't tell"}[c.outcome] }}</td>
+      <td>{{ c.name }}</td><td>{{ c.detail }}</td>
+      <td class="muted">{% if c.page %}p.{{ c.page }}{% endif %}{% if c.quote %} “{{ c.quote }}”{% endif %}</td></tr>
+  {% endfor %}</tbody>
+</table>
+{% endif %}
+{% endblock %}

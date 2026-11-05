@@ -21,7 +21,7 @@ from partslib.quantity import plain_number
 
 KEY_ORDER = (
     "ipn", "status", "category", "description", "params", "symbol", "footprint", "footprint_checked",
-    "model", "datasheet", "mpns", "supersedes", "superseded_by", "near_match_ack", "notes",
+    "checked_by", "model", "datasheet", "mpns", "supersedes", "superseded_by", "near_match_ack", "notes",
 )
 IMPORT_NOTE_START = "Not yet checked against the datasheet"
 _write_lock = threading.Lock()
@@ -125,6 +125,26 @@ def _uses_lfs(root: Path, path: str) -> bool:
     return result.stdout.strip().endswith(": filter: lfs")
 
 
+def write_and_commit(root: Path, files: dict[str, bytes], message: str) -> str:
+    """Write files that need no part check, such as a migration record, and commit them."""
+    with _write_lock:
+        if _git(root, "rev-parse", "--show-toplevel") != str(root.resolve()):
+            raise EditError(f"{root} is not the top of a git repository")
+        previous = {p: (root / p).read_bytes() if (root / p).exists() else None for p in files}
+        try:
+            for relative, data in files.items():
+                (root / relative).parent.mkdir(parents=True, exist_ok=True)
+                (root / relative).write_bytes(data)
+            return commit_files(root, list(files), message)
+        except EditError:
+            for relative, data in previous.items():
+                if data is None:
+                    (root / relative).unlink(missing_ok=True)
+                else:
+                    (root / relative).write_bytes(data)
+            raise
+
+
 def lfs_available(root: Path) -> bool:
     """git-lfs is on PATH and this clone uses it. Without `git lfs install`, git has no LFS filter
     and would silently commit the file itself instead of a pointer."""
@@ -222,8 +242,12 @@ def create(root: Path, path: str, part: dict) -> str:
     return save(root, path, part, f"Add {part['ipn']}: {part['description']}")
 
 
-def release(root: Path, ipn: str, lifecycle: str, checked: date) -> str:
-    """Record that the part was checked against its datasheet today, and release it."""
+def release(root: Path, ipn: str, lifecycle: str, checked: date, checked_by: str | None = None,
+            extra: dict[str, bytes] | None = None) -> str:
+    """Record that the part was checked against its datasheet today, and release it.
+
+    `checked_by` records a tool that did the check instead of a person, with `extra` its evidence.
+    """
     path, part = load_part(root, ipn)
     if part.get("status") != "draft":
         raise EditError(f"{ipn} is {part.get('status')}, not a draft")
@@ -234,11 +258,14 @@ def release(root: Path, ipn: str, lifecycle: str, checked: date) -> str:
     mpns[0]["lifecycle"] = lifecycle
     part["footprint_checked"] = checked
     part["status"] = "released"
+    if checked_by:
+        part["checked_by"] = checked_by
     notes = part.get("notes")
     if isinstance(notes, str) and IMPORT_NOTE_START in notes:
         kept = notes[: notes.index(IMPORT_NOTE_START)].strip()
         part["notes"] = kept
-    return save(root, path, part, f"Release {ipn}: {part.get('description', '')}")
+    how = " (datasheet check)" if checked_by else ""
+    return save(root, path, part, f"Release {ipn}{how}: {part.get('description', '')}", extra=extra)
 
 
 def update(root: Path, ipn: str, fields: dict[str, str], params: dict[str, str] | None, mpns: list[dict[str, str]], status: str | None) -> str:

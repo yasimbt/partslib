@@ -16,7 +16,7 @@ import subprocess
 import sys
 import tempfile
 
-from partslib.board import Board, BoardEntry, Placement, Source, load_board, parse_table
+from partslib.board import Board, BoardEntry, BoardError, Placement, Source, load_board, parse_table
 from partslib.check import RETIRED, check_records
 from partslib.library import load_categories, near_key, part_paths
 
@@ -34,6 +34,7 @@ CHECKS = {
     "machine-specific": ("info", "error", "library or model resolves only on this machine"),
     "library-unresolved": ("warning", "error", "symbol or footprint library is in no library table"),
     "library-item-missing": ("warning", "error", "library exists but no longer has the symbol or footprint"),
+    "draft-part": ("warning", "error", "part is still a draft, so it is not in the generated libraries"),
     "retired-part": ("warning", "warning", "part is deprecated"),
     "obsolete-part": ("error", "error", "part is obsolete"),
     "no-active-mpn": ("warning", "warning", "no MPN of the part is active"),
@@ -197,7 +198,9 @@ def scan_board(board: Board, status: str, root: Path, environment: Environment) 
             found["unknown-ipn"].append(reference)
         else:
             record = parts[ipn]
-            if record.status == "obsolete":
+            if record.status == "draft":
+                found["draft-part"].append(reference)
+            elif record.status == "obsolete":
                 found["obsolete-part"].append(reference)
             elif record.status in RETIRED:
                 found["retired-part"].append(reference)
@@ -373,15 +376,21 @@ def _check_libraries(board: Board, components, environment: Environment, add) ->
                     )
 
 
-def fresh_checkout(board: Board, entry: BoardEntry, work: Path) -> list[str]:
-    """Open the board as a fresh machine would, and return what KiCad cannot find."""
+def fresh_checkout(board: Board, entry: BoardEntry, work: Path, partslib: dict | None = None) -> list[str]:
+    """Open the board as a fresh machine would, and return what KiCad cannot find.
+
+    `partslib`, if given, is {"build": path, "libraries": {table: {name: uri}}}: the machine also has
+    partslib installed, as `partslib install` would leave it, and nothing else.
+    """
     copy = work / "board"
     if board.source.commit is None:
         shutil.copytree(entry.path, copy, ignore=shutil.ignore_patterns(".history", "*-backups"))
     else:
         # From the repository root: run in a subdirectory, git archive only includes that directory.
         archive = subprocess.run(
-            ["git", "-C", str(board.source.top), "archive", f"{board.source.commit}:{board.source.prefix}"],
+            # A board at the repository root has prefix ".", and "<commit>:." is not a valid tree.
+            ["git", "-C", str(board.source.top), "archive",
+             board.source.commit if str(board.source.prefix) in ("", ".") else f"{board.source.commit}:{board.source.prefix}"],
             capture_output=True,
             check=True,
         ).stdout
@@ -391,9 +400,16 @@ def fresh_checkout(board: Board, entry: BoardEntry, work: Path) -> list[str]:
     config.mkdir(parents=True)
     for table, kind in (("sym-lib-table", "sym_lib_table"), ("fp-lib-table", "fp_lib_table")):
         template = SHARED / "template" / table
+        extra = ""
+        for name, uri in sorted(((partslib or {}).get("libraries") or {}).get(table, {}).items()):
+            extra += f'\t(lib (name "{name}") (type "KiCad") (uri "{uri}") (options "") (descr "partslib"))\n'
         (config / table).write_text(
-            f'({kind}\n\t(version 7)\n\t(lib (name "KiCad") (type "Table") (uri "{template}") (options "") (descr ""))\n)\n',
+            f'({kind}\n\t(version 7)\n\t(lib (name "KiCad") (type "Table") (uri "{template}") (options "") (descr ""))\n{extra})\n',
             encoding="utf-8",
+        )
+    if partslib:
+        (config / "kicad_common.json").write_text(
+            json.dumps({"environment": {"vars": {"PARTSLIB": str(partslib["build"])}}}), encoding="utf-8"
         )
     env = {k: v for k, v in os.environ.items() if k != "PARTSLIB"}
     env["KICAD_CONFIG_HOME"] = str(work / "config")
@@ -420,15 +436,26 @@ def scan(
     entry: BoardEntry,
     commit: str | None,
     config_dir: Path | None,
-    fresh: bool = False,
+    fresh: bool | str = False,
 ) -> ScanResult:
+    """Scan a board. `fresh` is False, "bare" (or True) for a machine with only KiCad, or
+    "partslib" for one with partslib installed and nothing else."""
     source = Source(entry.path, commit)
     board = load_board(entry.name, source)
     environment = Environment.load(config_dir)
     result = scan_board(board, entry.status, root, environment)
     if fresh:
+        partslib = None
+        if fresh == "partslib":
+            from partslib.build import BUILD_DIR
+            from partslib.install import InstallError, generated_libraries
+
+            try:
+                partslib = {"build": (root / BUILD_DIR).resolve(), "libraries": generated_libraries(root)}
+            except InstallError as error:
+                raise BoardError(f"--fresh partslib: {error}") from None
         with tempfile.TemporaryDirectory(prefix="partslib-fresh-") as work:
-            for problem in fresh_checkout(board, entry, Path(work)):
+            for problem in fresh_checkout(board, entry, Path(work), partslib):
                 design, at_release, _ = CHECKS["fresh-checkout"]
                 result.findings.append(
                     BoardFinding("fresh-checkout", at_release if entry.status == "released" else design, problem)

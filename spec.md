@@ -121,6 +121,7 @@ draft -> released -> deprecated -> obsolete
 
 - **`draft`:** not generated into KiCad libraries.
 - **`released`:** requires a symbol, footprint, 3D model, datasheet, and at least one verified MPN. Pins must map to pads, and the footprint must be marked as checked against the datasheet.
+- **Checked by a person or by `partslib verify`:** decided by the user on 2026-11-05. `verify` sends the datasheet to Claude (`claude-opus-5-5`), which only extracts what the datasheet states, each with a page and a quote; partslib then compares that, deterministically, with the part's values, the symbol's pin numbers and the footprint's pad sizes, spacing and pitch (tolerances 0.25 mm for pads, 0.02 mm for pitch). A part is released only if every check passes; anything the datasheet does not state is "can't tell", which never passes. A part released this way records `checked_by`, and its evidence is committed in `verification/<IPN>.yaml`. Costs roughly 10–25 cents per datasheet; needs `ANTHROPIC_API_KEY`.
 - **`deprecated`:** stays available so old boards keep working, is hidden from new designs where possible, and is flagged on boards that use it.
 - **Parts are never deleted.** A released part's identity parameters cannot change; create a new part and set `superseded_by`.
 
@@ -199,6 +200,7 @@ Local web app at `http://127.0.0.1:<port>`, started with `partslib serve`.
 |---|---|
 | **Overview** | Part counts by status and category, board health, and parts needing attention |
 | **Parts** | Search and filter by any parameter, such as "1 kΩ, 0603, ≤ 1%". Rendered symbol and footprint previews (`kicad-cli sym export svg`, `fp export svg`) |
+| **Datasheet check** | Run `partslib verify` on one draft from its page, and show each check with its page and quote |
 | **Part detail** | Parameters, MPNs, datasheet, provenance, history from git, and **where used**: boards, quantities, designators |
 | **New part** | Form that runs the duplicate check as you type, and shows existing matches first |
 | **Boards** | All boards, with status, part count, percentage of parts with an IPN, and check results |
@@ -237,6 +239,14 @@ Existing parts are matched, not forced. Editing live board files is out of scope
 3. Suggest an existing IPN, or a draft part if none exists.
 4. A person confirms each match, and the tool prints the changes to make in KiCad.
 
+How it works (`partslib migrate`, and the board's Migration page):
+
+- **Matching:** groups of identical symbols are matched by the MPN they carry (a `Part` or `MPN` field, or the value for MPN-based parts such as ICs), then by LCSC number, then by identity parameters inferred from the catalogue fields, symbol name and footprint. Similar parts are listed but never suggested.
+- **Confirming** records the match in `migrations/<board>.yaml` and commits it; "confirm all same-MPN matches" does every group with exactly one library part carrying that MPN, as one commit. An unmatched group offers import from KiCad's libraries, a search on LCSC, or a new part prefilled from the board.
+- **Changes in KiCad:** listed per symbol and sheet, so a symbol on a reused sheet is one edit for all its designators. They are: set the `IPN` field, then, once the part is released and installed, change the symbol to its `PL_` library symbol.
+- **Done** once the board's symbols carry the IPN, which the next read of the board shows. An IPN on the board that differs from the confirmed one is a conflict.
+- **Reads the working tree by default**, so progress shows as soon as the board is saved in KiCad.
+
 **First import:** the parts on `DEV1_50_2_SGC-LP`, about 22 symbol types. Priorities are the 0603 passives, then C0805, `D_SMP`, EPC23108, STM32G474 and MCS1823. Do not bulk-import whole third-party libraries; that would bring back the problem in section 1.
 
 The power stage is the EPC23108 (SGC DL-25), but the board draws it with KiCad's EPC23102 symbol. It cannot be `released` until pin compatibility (SGC T-36) and its footprint (SGC T-12) are checked against the datasheet.
@@ -262,13 +272,15 @@ partslib/
   assets/3dmodels/                 # git LFS
   assets/provenance.yaml
   boards.yaml
+  migrations/<board>.yaml          # board parts matched to IPNs, confirmed by hand (section 9)
+  verification/<IPN>.yaml          # evidence for parts released by the datasheet check (5.4)
   build/                           # generated; not committed
   src/partslib/                    # CLI, generator, scanner, web app
   tests/fixtures/                  # small KiCad projects, including deliberately broken ones
   flake.nix                        # pinned environment
 ```
 
-CLI: `check`, `build`, `install`, `add`, `scan`, `vendor`, `serve`.
+CLI: `check`, `build`, `install`, `add`, `scan`, `migrate`, `verify`, `vendor`, `serve`.
 
 ## 12. Milestones
 
@@ -282,7 +294,7 @@ Each one is finished when its acceptance test passes.
 | M3 | Board scanner and checks, command line only | Scanning `DEV1_50_2_SGC-LP` at a pinned commit (`daebef2`, the board as audited) reports the known problems in section 1, without the false results from per-instance references |
 | M4 | Dashboard, read-only: parts, boards, where-used | Finding "which boards use this part?" takes under 10 seconds |
 | M5 | Dashboard editing and the new-part flow | A part added in the browser produces one git commit and passes `check` |
-| M6 | Migrate `DEV1_50_2_SGC-LP` | Every part on the board has an IPN, and the board opens from a fresh clone with no extra setup |
+| M6 | Migrate `DEV1_50_2_SGC-LP` | Every part on the board has an IPN, and the board opens from a fresh clone on a machine with partslib installed and no other libraries (`partslib scan --fresh partslib`). A machine without partslib is M7 |
 | M7 | `vendor` | A vendored board opens correctly on a machine without partslib installed |
 
 M0 comes first because D3 depends on it. If generated libraries prove unworkable, revisit D3 before building more.

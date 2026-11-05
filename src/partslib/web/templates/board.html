@@ -3,6 +3,7 @@
 {% block title %}{{ board.name }}{% endblock %}
 {% block main %}
 <h1>{{ board.name }}</h1>
+<p class="actions"><a class="button primary" href="/boards/{{ board.name }}/migrate">Migrate to library parts</a></p>
 <p class="muted">{{ board.status }} · {{ board.path }}{% if board.source %} · scanned at <span class="mono">{{ board.source[:12] }}</span> on {{ board.scanned_at }}{% endif %}</p>
 {% if not board.source %}<p class="empty">Not scanned yet. Run <code>partslib scan {{ board.name }}</code>.</p>{% else %}
 

@@ -64,9 +64,23 @@ def build_parser() -> argparse.ArgumentParser:
     where = scan_parser.add_mutually_exclusive_group()
     where.add_argument("--commit", default="HEAD", help="board repository revision to scan (default: HEAD)")
     where.add_argument("--worktree", action="store_true", help="scan the files on disk, including uncommitted changes")
-    scan_parser.add_argument("--fresh", action="store_true", help="also open the board in KiCad as a fresh machine would")
+    scan_parser.add_argument(
+        "--fresh", nargs="?", const="bare", choices=("bare", "partslib"),
+        help="also open the board from a fresh checkout: on a machine with only KiCad (bare, the default), "
+        "or with partslib installed as well",
+    )
     scan_parser.add_argument("--config-dir", type=Path, help="KiCad config to resolve libraries against (default: KiCad's own)")
     scan_parser.add_argument("--all", action="store_true", help="list every designator, not just the first few")
+
+    migrate_parser = subparsers.add_parser("migrate", help="Match a board's parts to library parts (confirm them in the dashboard)")
+    migrate_parser.add_argument("board")
+    migrate_parser.add_argument("--commit", help="board revision to read (default: the working tree)")
+
+    verify_parser = subparsers.add_parser(
+        "verify", help="Check draft parts against their datasheets with Claude, and release those that pass"
+    )
+    verify_parser.add_argument("ipns", nargs="*", metavar="IPN", help="parts to check (default: every draft)")
+    verify_parser.add_argument("--no-release", action="store_true", help="report only; release nothing")
 
     serve = subparsers.add_parser("serve", help="Start the local dashboard on 127.0.0.1")
     serve.add_argument("--port", type=int, default=8765)
@@ -142,6 +156,59 @@ def _run_scan(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def _run_migrate(args: argparse.Namespace) -> int:
+    from collections import Counter
+
+    from partslib import migrate
+
+    boards = {board.name: board for board in load_boards(args.root)}
+    if args.board not in boards:
+        raise BoardError(f"unknown board {args.board}; boards.yaml has {', '.join(boards) or 'none'}")
+    board, groups = migrate.load(args.root, boards[args.board], args.commit)
+    counts = Counter(g.status for g in groups)
+    done = sum(len(g.references) for g in groups if g.status == "done")
+    total = sum(len(g.references) for g in groups)
+    print(f"{args.board} at {board.source.label()[:12]}: {done} of {total} parts have an IPN; "
+          + ", ".join(f"{n} {s}" for s, n in sorted(counts.items())))
+    for group in groups:
+        match = group.confirmed or (group.suggestion or {}).get("ipn", "")
+        how = "confirmed" if group.confirmed else (group.suggestion or {}).get("how", "")
+        shown = ", ".join(group.references[:6]) + (f" and {len(group.references) - 6} more" if len(group.references) > 6 else "")
+        print(f"  {group.status:9} {match or '-':11} {how:16} {group.lib_id} {group.value}  [{shown}]")
+    print(f"Confirm matches at http://127.0.0.1:8765/boards/{args.board}/migrate")
+    return 0
+
+
+def _run_verify(args: argparse.Namespace) -> int:
+    from partslib import verify
+    from partslib.library import load_yaml, part_paths
+
+    ipns = args.ipns or sorted(
+        p.stem for p in part_paths(args.root)
+        if isinstance(raw := load_yaml((args.root / p).read_bytes()), dict) and raw.get("status") == "draft"
+    )
+    if not ipns:
+        print("no draft parts to check")
+        return 0
+    released = needs_you = 0
+    for ipn in ipns:
+        try:
+            result = verify.verify(args.root, ipn, release=not args.no_release)
+        except verify.VerifyError as error:
+            print(f"{ipn}: not checked: {error}")
+            needs_you += 1
+            continue
+        verdict = "released" if result.released else ("passed" if result.passed else "needs you")
+        print(f"{ipn}: {verdict} (read by {result.model})")
+        for check in result.checks:
+            page = f" p.{check.page}" if check.page else ""
+            print(f"    {check.outcome:7} {check.name}: {check.detail}{page}")
+        released += bool(result.released)
+        needs_you += not result.passed
+    print(f"{released} released, {needs_you} need you")
+    return 1 if needs_you else 0
+
+
 def _run_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -159,6 +226,8 @@ COMMAND_RUNNERS = {
     "build": _run_build,
     "install": _run_install,
     "scan": _run_scan,
+    "migrate": _run_migrate,
+    "verify": _run_verify,
     "serve": _run_serve,
 }
 

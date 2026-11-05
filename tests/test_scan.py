@@ -123,6 +123,10 @@ def library_item_missing(root, board, config):
     (board / "lib/PL_Resistor.pretty/R_0603.kicad_mod").unlink()
 
 
+def draft_part(root, board, config):
+    edit(root, RESISTOR, "status: released", "status: draft")
+
+
 def retired_part(root, board, config):
     edit(root, RESISTOR, "status: released", "status: deprecated")
 
@@ -162,6 +166,7 @@ CASES = {
     "machine-specific": [machine_specific_model, machine_specific_library],
     "library-unresolved": [library_unresolved],
     "library-item-missing": [library_item_missing],
+    "draft-part": [draft_part],
     "retired-part": [retired_part],
     "obsolete-part": [obsolete_part],
     "no-active-mpn": [no_active_mpn],
@@ -242,6 +247,13 @@ def test_cli_scans_registered_boards_saves_results_and_fails_on_errors(setup, ca
     no_footprint(*setup)
     assert main(["--root", str(root), "scan", "--worktree", "--config-dir", str(config)]) == 1
     assert "no-footprint" in capsys.readouterr().out
+
+
+def test_cli_migrate_lists_the_plan(setup, capsys):
+    root, board, config = setup
+    write(root, "boards.yaml", f"- name: demo\n  path: {board}\n  status: in_design\n")
+    assert main(["--root", str(root), "migrate", "demo"]) == 0
+    assert "2 of 2 parts have an IPN" in capsys.readouterr().out
 
 
 def test_cli_rejects_an_unknown_board(setup, capsys):

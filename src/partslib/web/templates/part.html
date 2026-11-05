@@ -5,7 +5,13 @@
 {% if saved %}<p class="card">Saved and committed as <span class="mono">{{ saved }}</span>.</p>{% endif %}
 <h1><span class="mono">{{ part.ipn }}</span> {{ status(part.status) }}</h1>
 <p class="actions">
-  {% if part.status == "draft" %}<a class="button primary" href="/parts/{{ part.ipn }}/release">Check against datasheet and release</a>{% endif %}
+  {% if part.status == "draft" %}
+  <form method="post" action="/parts/{{ part.ipn }}/verify" style="display:inline" onsubmit="this.querySelector('button').disabled=true; this.querySelector('button').textContent='Reading the datasheet, about a minute…'">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <button type="submit" class="primary">Check datasheet automatically</button>
+  </form>
+  <a class="button" href="/parts/{{ part.ipn }}/release">Check it myself</a>
+  {% endif %}
   <a class="button" href="/parts/{{ part.ipn }}/edit">Edit</a>
 </p>
 <p>{{ part.description }}{% if part.value %} · <strong>{{ part.value }}</strong>{% endif %}</p>
@@ -55,6 +61,7 @@
 <h2>Problems</h2>
 <ul>{% for f in findings %}<li class="sev-error"><code>{{ f.code }}</code> {{ f.message }}</li>{% endfor %}</ul>
 {% endif %}
+{% if part.checked_by %}<p class="muted">Checked by {{ part.checked_by }}.</p>{% endif %}
 {% if part.notes %}<h2>Notes</h2><p>{{ part.notes }}</p>{% endif %}
 
 <h2>History</h2>

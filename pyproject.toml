@@ -9,6 +9,8 @@ dependencies = ["pyyaml", "fastapi", "uvicorn", "jinja2"]
 dev = ["pytest", "httpx"]
 # Fetching parts from LCSC/EasyEDA. easyeda2kicad is AGPL-3.0, so partslib only runs it as a program.
 import = ["easyeda2kicad==1.0.1"]
+# Automatic datasheet checks with Claude (`partslib verify`).
+verify = ["anthropic>=2.6"]
 
 [project.scripts]
 partslib = "partslib.cli:main"

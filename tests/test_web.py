@@ -145,7 +145,8 @@ def test_only_the_editing_routes_accept_posts(site):
     _root, client = site
     posts = sorted(r.path for r in client.app.routes if "POST" in (getattr(r, "methods", None) or ()))
     assert posts == [
-        "/import/fetch", "/import/{stage_id}", "/parts/new", "/parts/new/check", "/parts/{ipn}/edit", "/parts/{ipn}/release",
+        "/boards/{name}/migrate", "/import/fetch", "/import/{stage_id}", "/parts/new", "/parts/new/check",
+        "/parts/{ipn}/edit", "/parts/{ipn}/release", "/parts/{ipn}/verify",
     ]
 
 

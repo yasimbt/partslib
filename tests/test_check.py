@@ -142,7 +142,8 @@ def test_the_spec_example_passes(library):
 
 
 def test_the_repository_itself_passes():
-    assert check_library(REPO, since="HEAD")[1] == []
+    # build/ is local and not in git, so whether it is current depends on this machine, not the code.
+    assert check_library(REPO, since="HEAD", include_build_dir=False)[1] == []
 
 
 def test_an_empty_library_passes(library):

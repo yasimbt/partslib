@@ -1,0 +1,24 @@
+# Generated KiCad libraries (spec section 6)
+/build/
+
+# SQLite index, rebuilt from the part files (spec D2)
+*.sqlite
+*.sqlite3
+*.db
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+dist/
+*.egg-info/
+
+# KiCad local state
+*-backups/
+*.kicad_prl
+fp-info-cache
+~*.lck
+
+# macOS
+.DS_Store

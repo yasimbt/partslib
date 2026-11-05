@@ -1,0 +1,6 @@
+# Boards tracked by partslib (spec section 7).
+- name: DEV1_50_2_SGC-LP
+  path: ~/code/sgc/hardware/DEV1_50_2_SGC-LP
+  remote: github.com/yasimbt/DEV1-SGC-Starter-Generator-Controller
+  project: SGC
+  status: in_design

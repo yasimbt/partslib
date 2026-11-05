@@ -4,7 +4,7 @@ Personal, single-source KiCad 10 parts library with a local dashboard. `spec.md`
 
 ## Status
 
-M0 and M1 are done. M2 (`build`, `install`) is built, but its acceptance is pending: the 12 imported 0603 passives stay drafts until the user checks them through the M5 dashboard, so `build` generates nothing from the real library yet. M3 and M4 must work with draft parts. `scan`, `serve` and `vendor` exit 1 until their milestones. `src/partslib/kicadgen.py` holds all KiCad output. `spikes/m0/run.py` and `spikes/m2/acceptance.py` check output against KiCad without the GUI; both run on copies or in their own directories. Work follows the milestones in spec section 12, each finished when its acceptance test passes.
+M0 and M1 are done. M2 (`build`, `install`) is built, but its acceptance is pending: the 12 imported 0603 passives stay drafts until the user checks them through the M5 dashboard, so `build` generates nothing from the real library yet. M3 and M4 must work with draft parts. M3 (`scan`) is built; its acceptance test runs against the real board in `~/code/sgc` at commit `daebef2`. `serve` and `vendor` exit 1 until their milestones. `src/partslib/kicadgen.py` holds all KiCad output. `spikes/m0/run.py` and `spikes/m2/acceptance.py` check output against KiCad without the GUI; both run on copies or in their own directories. Work follows the milestones in spec section 12, each finished when its acceptance test passes.
 
 ## Commands
 
@@ -31,7 +31,9 @@ nixpkgs marks KiCad as broken on Darwin, so on macOS the dev shell uses `/Applic
 - Generated output must be stable and diff cleanly. All KiCad file generation goes through one module.
 - Generated symbols are flattened, one complete symbol per part, with no base symbols in the output: a base could be placed without an IPN. Don't switch to `extends`.
 - Copy third-party parts in individually and record source, licence and version in `assets/provenance.yaml`. Never bulk-import a library.
-- The scanner must expand per-instance references: on reused sheets the `Reference` property is not the real designator.
+- The scanner must expand per-instance references: on reused sheets the `Reference` property is not the real designator. Match schematic parts to PCB footprints by sheet-instance path, never by designator.
+- `scan` reads the user's real KiCad config and must never write to it. Board repositories are read-only too: don't commit or change files there.
+- Run `git archive` and `git ls-tree` from the repository root, or with `--full-tree`. From a subdirectory they silently restrict output to that directory.
 - Every validation rule and board check needs a test with a fixture showing that it can fail. `tests/test_check.py` enforces this for every code in `check.RULES`.
 - `check` must report problems in hand-edited files, never crash on them.
 - A stored value must parse back to exactly the same value, or duplicate detection stops working: compare exact Fractions, never floats.

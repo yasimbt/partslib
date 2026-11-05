@@ -167,7 +167,11 @@ Boards are registered in `boards.yaml`, by path and git remote:
   status: in_design
 ```
 
-The scanner reads each board's `.kicad_sch` and `.kicad_pcb` files, plus `kicad-cli sch export bom` where useful. It records results by git commit, so history can be compared. It must expand per-instance references: on reused sheets the `Reference` property is not the real designator, which produced false results in the manual audit of this board.
+`status` is `in_design` or `released`, and sets the severities below.
+
+The scanner reads each board's `.kicad_sch` and `.kicad_pcb` files, plus `kicad-cli sch export bom` where useful. It records results by git commit, so history can be compared. It must expand per-instance references: on reused sheets the `Reference` property is not the real designator, which produced false results in the manual audit of this board. Schematic parts and PCB footprints are matched by sheet-instance path, not by designator.
+
+`partslib scan` reads a board as committed (default `HEAD`), or on disk with `--worktree`, and saves results to `build/scans/<board>/<commit>.json`. `--fresh` also opens the board in KiCad as a fresh machine would: the files at that commit, and only KiCad's stock libraries. Library references are resolved against this machine's KiCad config, which is read and never written.
 
 Checks per board:
 
@@ -179,7 +183,9 @@ Checks per board:
 | Non-power symbol has no footprint | error |
 | 3D model path does not resolve, or no model is assigned | warning |
 | Library reference resolves only on this machine | error at release |
-| Part is `deprecated` or `obsolete`, or no MPN is `active` | warning; error if `obsolete` |
+| Library is in no library table, or no longer has the symbol or footprint | warning; error at release |
+| A symbol has no designator for one of its sheet instances | warning |
+| Part is `deprecated` or `obsolete`, or no MPN is `active` | warning; error if `obsolete`, even in design |
 | Two IPNs with the same function on one board | warning |
 | Board can be opened from a fresh checkout | required for release |
 
@@ -252,7 +258,7 @@ Each one is finished when its acceptance test passes.
 | M0 | Spike: generate one symbol and footprint, and use them in KiCad 10 | A generated part can be placed from KiCad, with all fields present, and shows in the 3D viewer on a clean config |
 | M1 | Part schema, `check`, and duplicate detection | Adding `1k`, `1000` and `1K0` versions of the same resistor is rejected; each validation rule has a failing fixture |
 | M2 | `build` and `install`, with 10 real passives | A new KiCad project can use them with no manual library setup |
-| M3 | Board scanner and checks, command line only | Scanning `DEV1_50_2_SGC-LP` at a pinned commit reports the known problems in section 1, without the false results from per-instance references |
+| M3 | Board scanner and checks, command line only | Scanning `DEV1_50_2_SGC-LP` at a pinned commit (`daebef2`, the board as audited) reports the known problems in section 1, without the false results from per-instance references |
 | M4 | Dashboard, read-only: parts, boards, where-used | Finding "which boards use this part?" takes under 10 seconds |
 | M5 | Dashboard editing and the new-part flow | A part added in the browser produces one git commit and passes `check` |
 | M6 | Migrate `DEV1_50_2_SGC-LP` | Every part on the board has an IPN, and the board opens from a fresh clone with no extra setup |

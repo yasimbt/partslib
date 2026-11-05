@@ -5,14 +5,15 @@ from pathlib import Path
 import sys
 
 from partslib.add import add_part
+from partslib.board import BoardError, load_boards
 from partslib.build import BuildError, build_library
 from partslib.check import check_library
 from partslib.install import InstallError, install
 from partslib.library import LibraryError
+from partslib.scan import format_result, save, scan
 
 # Commands not built yet -> (help text, milestone that delivers them).
 PLANNED = {
-    "scan": ("Scan registered boards and run board checks", "M3"),
     "serve": ("Start the local dashboard", "M4"),
     "vendor": ("Copy a board's parts into its project lib/ folder", "M7"),
 }
@@ -58,6 +59,15 @@ def build_parser() -> argparse.ArgumentParser:
     install_parser.add_argument(
         "--config-dir", type=Path, help="KiCad config directory (default: KiCad's own, for its version)"
     )
+
+    scan_parser = subparsers.add_parser("scan", help="Scan registered boards and run the board checks")
+    scan_parser.add_argument("boards", nargs="*", metavar="BOARD", help="boards from boards.yaml (default: all)")
+    where = scan_parser.add_mutually_exclusive_group()
+    where.add_argument("--commit", default="HEAD", help="board repository revision to scan (default: HEAD)")
+    where.add_argument("--worktree", action="store_true", help="scan the files on disk, including uncommitted changes")
+    scan_parser.add_argument("--fresh", action="store_true", help="also open the board in KiCad as a fresh machine would")
+    scan_parser.add_argument("--config-dir", type=Path, help="KiCad config to resolve libraries against (default: KiCad's own)")
+    scan_parser.add_argument("--all", action="store_true", help="list every designator, not just the first few")
 
     for name, (help_text, _milestone) in PLANNED.items():
         subparsers.add_parser(name, help=help_text)
@@ -108,7 +118,35 @@ def _run_install(args: argparse.Namespace) -> int:
     return 0
 
 
-COMMAND_RUNNERS = {"check": _run_check, "add": _run_add, "build": _run_build, "install": _run_install}
+def _run_scan(args: argparse.Namespace) -> int:
+    boards = load_boards(args.root)
+    if not boards:
+        raise BoardError("no boards in boards.yaml")
+    known = {board.name: board for board in boards}
+    unknown = [name for name in args.boards if name not in known]
+    if unknown:
+        raise BoardError(f"unknown board {', '.join(unknown)}; boards.yaml has {', '.join(known)}")
+    config = args.config_dir
+    if config is None:
+        from partslib.install import default_config_dir
+
+        config = default_config_dir()
+    failed = False
+    for name in args.boards or list(known):
+        result = scan(args.root, known[name], None if args.worktree else args.commit, config, args.fresh)
+        print(format_result(result, limit=10**6 if args.all else 12))
+        print(f"  saved {save(args.root, result)}")
+        failed |= result.counts()["error"] > 0
+    return 1 if failed else 0
+
+
+COMMAND_RUNNERS = {
+    "check": _run_check,
+    "add": _run_add,
+    "build": _run_build,
+    "install": _run_install,
+    "scan": _run_scan,
+}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -119,6 +157,6 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     try:
         return COMMAND_RUNNERS[args.command](args)
-    except (LibraryError, BuildError, InstallError) as error:
+    except (LibraryError, BuildError, InstallError, BoardError) as error:
         print(f"partslib: {error}", file=sys.stderr)
         return 2

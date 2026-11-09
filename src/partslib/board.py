@@ -7,6 +7,7 @@ same path.
 """
 
 from dataclasses import dataclass, field
+import json
 from pathlib import Path, PurePosixPath
 import subprocess
 
@@ -157,6 +158,7 @@ class Board:
     placements: list[Placement] = field(default_factory=list)
     footprints: list[Footprint] = field(default_factory=list)
     tables: dict[str, list[tuple[str, str, str]]] = field(default_factory=dict)  # (name, type, uri)
+    text_variables: dict[str, str] = field(default_factory=dict)  # from the .kicad_pro
 
 
 def _parse(source: Source, relative: str) -> sexpr.Node:
@@ -181,6 +183,11 @@ def load_board(name: str, source: Source) -> Board:
         raise BoardError(f"{name}: expected one .kicad_pro in {source.directory}, found {len(projects)}")
     project = projects[0].removesuffix(".kicad_pro")
     board = Board(name, source, project)
+    try:
+        variables = json.loads(source.read(projects[0])).get("text_variables")
+    except ValueError:
+        variables = None
+    board.text_variables = {k: str(v) for k, v in variables.items()} if isinstance(variables, dict) else {}
 
     root_file = f"{project}.kicad_sch"
     root = _parse(source, root_file)

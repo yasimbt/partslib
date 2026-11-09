@@ -105,6 +105,16 @@ def _expand(path: str, variables: dict[str, str]) -> str | None:
     return VARIABLE.sub(lambda m: variables[m.group(1)], path)
 
 
+def expand_project_variables(path: str, variables: dict[str, str]) -> str:
+    """Expand a project's text variables, which KiCad applies before the environment's."""
+    for _depth in range(5):  # they may refer to each other, as PARTSLIB to KIPRJMOD
+        expanded = VARIABLE.sub(lambda m: variables.get(m.group(1), m.group(0)), path)
+        if expanded == path:
+            break
+        path = expanded
+    return path
+
+
 def classify_path(path: str, environment: Environment) -> str:
     """project | stock | partslib | machine | undefined, by what the path depends on."""
     names = VARIABLE.findall(path)
@@ -264,7 +274,8 @@ def _check_models(board: Board, environment: Environment, found, notes, add) -> 
         if not footprint.models:
             found["no-model"].append(footprint.reference)
             continue
-        for model in footprint.models:
+        for original in footprint.models:
+            model = expand_project_variables(original, board.text_variables)
             kind = classify_path(model, environment)
             if kind == "project":
                 relative = model.split("}", 1)[1].lstrip("/") if model.startswith("${KIPRJMOD}") else model
@@ -278,7 +289,7 @@ def _check_models(board: Board, environment: Environment, found, notes, add) -> 
                     "project": f"not in the project at {board.source.label()[:12]}",
                     "undefined": "uses a variable this machine does not define",
                 }.get(kind, "file not found")
-                notes["model-unresolved"].append(f"{footprint.reference}: {model} ({where})")
+                notes["model-unresolved"].append(f"{footprint.reference}: {original} ({where})")
             if kind in ("machine", "partslib", "undefined"):
                 names = VARIABLE.findall(model)
                 machine[f"${{{names[0]}}}" if names else "absolute paths"].append(footprint.reference)
@@ -421,9 +432,19 @@ def fresh_checkout(board: Board, entry: BoardEntry, work: Path, partslib: dict |
         capture_output=True,
         check=False,
     )
-    if not report.is_file():
-        return ["KiCad could not open the schematic"]
     problems: dict[str, int] = defaultdict(int)
+    # 3D models, as that machine would resolve them: KiCad's own variables, the project's, and no others.
+    variables = {k: v for k, v in Environment.load(None).builtin.items()}
+    if partslib:
+        variables["PARTSLIB"] = str(partslib["build"])
+    variables["KIPRJMOD"] = str(copy)
+    for footprint in board.footprints:
+        for model in footprint.models:
+            expanded = _expand(expand_project_variables(model, board.text_variables), variables)
+            if expanded is None or not Path(expanded).is_file():
+                problems[f"3D model {model} does not load"] += 1
+    if not report.is_file():
+        return ["KiCad could not open the schematic"] + [f"{d} ({n}x)" for d, n in sorted(problems.items())]
     for sheet in json.loads(report.read_text(encoding="utf-8"))["sheets"]:
         for violation in sheet["violations"]:
             if violation["type"] in ("lib_symbol_issues", "footprint_link_issues"):

@@ -11,11 +11,10 @@ from partslib.check import check_library
 from partslib.install import InstallError, install
 from partslib.library import LibraryError
 from partslib.scan import format_result, save, scan
+from partslib.vendor import VendorError
 
 # Commands not built yet -> (help text, milestone that delivers them).
-PLANNED = {
-    "vendor": ("Copy a board's parts into its project lib/ folder", "M7"),
-}
+PLANNED: dict[str, tuple[str, str]] = {}
 
 
 def _key_value(text: str) -> tuple[str, str]:
@@ -81,6 +80,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     verify_parser.add_argument("ipns", nargs="*", metavar="IPN", help="parts to check (default: every draft)")
     verify_parser.add_argument("--no-release", action="store_true", help="report only; release nothing")
+
+    vendor_parser = subparsers.add_parser(
+        "vendor", help="Copy a board's library parts into its lib/ folder, so it opens without partslib"
+    )
+    vendor_parser.add_argument("board")
+    vendor_parser.add_argument("--dry-run", action="store_true", help="show what would change; write nothing")
+    vendor_parser.add_argument("--force", action="store_true", help="vendor even if the files it changes have uncommitted edits")
 
     serve = subparsers.add_parser("serve", help="Start the local dashboard on 127.0.0.1")
     serve.add_argument("--port", type=int, default=8765)
@@ -209,6 +215,27 @@ def _run_verify(args: argparse.Namespace) -> int:
     return 1 if needs_you else 0
 
 
+def _run_vendor(args: argparse.Namespace) -> int:
+    from partslib.vendor import vendor
+
+    boards = {board.name: board for board in load_boards(args.root)}
+    if args.board not in boards:
+        raise BoardError(f"unknown board {args.board}; boards.yaml has {', '.join(boards) or 'none'}")
+    result = vendor(args.root, boards[args.board], dry_run=args.dry_run, force=args.force)
+    verb = "would vendor" if args.dry_run else "vendored"
+    print(f"{verb} {result.symbols} symbols, {result.footprints} footprints and {result.models} 3D models into {result.board}/lib/partslib")
+    for path in result.changed:
+        print(f"  {'would change' if args.dry_run else 'changed'} {path}")
+    if not result.changed:
+        print("  nothing changed: already vendored")
+    for library in result.not_vendored:
+        print(f"  not from partslib, so not vendored: {library}")
+    if result.changed and not args.dry_run:
+        print("Check it opens from a fresh clone: partslib scan " + args.board + " --worktree --fresh")
+        print("Then commit the changes in the board's repository.")
+    return 0
+
+
 def _run_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -228,6 +255,7 @@ COMMAND_RUNNERS = {
     "scan": _run_scan,
     "migrate": _run_migrate,
     "verify": _run_verify,
+    "vendor": _run_vendor,
     "serve": _run_serve,
 }
 
@@ -240,6 +268,6 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     try:
         return COMMAND_RUNNERS[args.command](args)
-    except (LibraryError, BuildError, InstallError, BoardError) as error:
+    except (LibraryError, BuildError, InstallError, BoardError, VendorError) as error:
         print(f"partslib: {error}", file=sys.stderr)
         return 2

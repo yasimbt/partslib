@@ -156,6 +156,11 @@ build/
 
 **Boards at release.** `partslib vendor <board>` copies the board's parts into its project `lib/` folder and rewrites its library table, so the board is self-contained (goal 6). This matches the rule in the SGC SOP that libraries a design depends on live in `hardware/<designator>/lib/`.
 
+- **What is copied:** only the symbols, footprints and 3D models the board uses, from `build/`, into `lib/partslib/`, with `lib/partslib/provenance.yaml` recording each one's source and licence. The folder is rebuilt whole each time, so parts no longer used go away.
+- **How the board finds them:** its `sym-lib-table` and `fp-lib-table` point the `PL_` libraries at `${KIPRJMOD}/lib/partslib/...`, and its `.kicad_pro` defines the text variable `PARTSLIB` as `${KIPRJMOD}/lib/partslib`. The `${PARTSLIB}/...` 3D model paths already in the PCB then resolve without editing the PCB file. KiCad gives a project text variable precedence over the environment and its config (tested on 10.0.8), so a vendored board uses its own copies even where partslib is installed.
+- **What it writes:** `lib/partslib/`, the two library tables (other entries kept byte for byte) and the `.kicad_pro`; nothing else, and it never commits. It refuses while KiCad is open, when `check` fails or the build is stale, when a part the board uses is not built, and when the files it changes have uncommitted edits (unless `--force`). `--dry-run` shows the change.
+- **Checking it:** `partslib scan <board> --fresh` opens the board as a machine with only KiCad would, and reports library and 3D model problems.
+
 ## 7. Board tracking
 
 Boards are registered in `boards.yaml`, by path and git remote:
@@ -295,7 +300,7 @@ Each one is finished when its acceptance test passes.
 | M4 | Dashboard, read-only: parts, boards, where-used | Finding "which boards use this part?" takes under 10 seconds |
 | M5 | Dashboard editing and the new-part flow | A part added in the browser produces one git commit and passes `check` |
 | M6 | Migrate `DEV1_50_2_SGC-LP` | Every part on the board has an IPN, and the board opens from a fresh clone on a machine with partslib installed and no other libraries (`partslib scan --fresh partslib`). A machine without partslib is M7 |
-| M7 | `vendor` | A vendored board opens correctly on a machine without partslib installed |
+| M7 | `vendor` | A vendored board opens correctly on a machine without partslib installed (`partslib scan --fresh`: no library or 3D model problems) |
 
 M0 comes first because D3 depends on it. If generated libraries prove unworkable, revisit D3 before building more.
 

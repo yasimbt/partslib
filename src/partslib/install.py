@@ -79,7 +79,8 @@ def _entry(name: str, uri: str) -> str:
     )
 
 
-def update_table(text: str | None, kind: str, libraries: dict[str, str], template: Path | None) -> str:
+def update_table(text: str | None, kind: str, libraries: dict[str, str], template: Path | None,
+                 owned_prefix: str = OWNED_URI_PREFIX) -> str:
     """Return a library table with exactly `libraries` (name -> URI) as its partslib entries.
 
     Other entries are kept byte for byte. A new table also gets KiCad's default libraries, as
@@ -105,7 +106,7 @@ def update_table(text: str | None, kind: str, libraries: dict[str, str], templat
         uri = re.search(r'\(uri "((?:[^"\\]|\\.)*)"', child)
         if name is None or not name.group(1).startswith("PL_"):
             continue
-        if uri is None or not uri.group(1).startswith(OWNED_URI_PREFIX):
+        if uri is None or not uri.group(1).startswith(owned_prefix):
             raise InstallError(
                 f"{kind} already has a library named {name.group(1)} that partslib did not create; "
                 "rename or remove it first"

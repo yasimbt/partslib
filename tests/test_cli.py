@@ -8,8 +8,10 @@ def test_cli_exposes_the_commands_in_the_spec():
     assert set(subparsers) == {"check", "build", "install", "add", "scan", "migrate", "verify", "vendor", "serve"}
 
 
-@pytest.mark.parametrize("command", PLANNED)
+@pytest.mark.parametrize("command", PLANNED or ["unused"])
 def test_unimplemented_commands_fail_rather_than_pretend_to_succeed(command, capsys):
+    if not PLANNED:
+        pytest.skip("every command in the spec is built")
     assert main([command]) == 1
     assert "not implemented" in capsys.readouterr().err
 
